@@ -9,7 +9,7 @@
 
 1. **Neon Console** aç
 2. Sol tarafta **"SQL Editor"** tıkla
-3. **NEON_TUMU_KURU_BASLATMA.sql** dosyasının tüm içeriğini kopyala
+3. **NEON_TAM_KURULUM.sql** dosyasının tüm içeriğini kopyala
 4. SQL Editor'a yapıştır
 5. **RUN** tuşuna bas (üst sağda mavi button)
 6. ✅ Sonuç olarak şu mesajı göreceksin:
@@ -194,7 +194,7 @@ Sonuç:
 
 ## 🎯 ÖZET
 
-1. ✅ SQL çalıştır (NEON_TUMU_KURU_BASLATMA.sql)
+1. ✅ SQL çalıştır (NEON_TAM_KURULUM.sql)
 2. ✅ Managed Better Auth aç (Neon > Data API > Settings)
 3. ✅ Schema cache refresh et
 4. ✅ config.js'de API URL güncelle

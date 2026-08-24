@@ -30,6 +30,20 @@ Yerelde hem sentetik Data Matrix hem QR test görselleriyle
 Gerçek termal yazıcı etiketleri üzerinde nihai doğrulama kullanıcının
 kendi cihazında yapılmalı.
 
+## v8.2 düzeltmesi — üç ayrı SQL dosyası tek dosyada birleştirildi
+
+`NEON_TUMU_KURU_BASLATMA.sql`, `NEON_KURULUM_MESAJLAR.sql` ve
+`NEON_KURULUM_QR_ETIKET.sql` arasında küçük tutarsızlıklar vardı
+(ör. `kargo_cikis_kayitlari`'nın iki farklı tanımı) ve hangisinin
+gerçekten çalıştırıldığı zamanla belirsizleşti — sonuçta canlı
+ortamda `etiket_foto_base64` kolonu hiç oluşmamış, kargo kaydı API
+hatasıyla başarısız oluyordu. Üçü de silindi, yerine **tek** dosya
+geldi: `NEON_TAM_KURULUM.sql`. Bu dosya önce tüm tabloları siler,
+sonra v8 ile tam uyumlu haliyle sıfırdan kurar (mevcut veriler
+silinir — bilinçli bir sıfırlama, kullanıcının isteği üzerine).
+Bundan sonra şema değişikliği gerektiğinde bu dosya güncellenip
+tekrar çalıştırılmalı; ayrı ayrı ALTER TABLE dosyaları eklenmemeli.
+
 ## 1) Kaldırılan eski QR sistemi
 
 `js/vendor/qrcode.js` (QR **üretici** kütüphane) ve `js/qrcode-handler.js`
