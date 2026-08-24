@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>KargoTakip — Depo &amp; Kargo Yönetim Paneli</title>
+<meta name="theme-color" content="#0A0E27" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+<link rel="stylesheet" href="css/style-v5.css" />
+<link rel="stylesheet" href="css/theme-v7.css" />
+</head>
+<body>
+
+<!-- ============ TOAST & MODAL HOSTS ============ -->
+<div id="toast-host" class="toast-host"></div>
+<div id="modal-host" class="modal-host"></div>
+<div id="notif-panel-host" class="notif-panel-host"></div>
+
+<!-- ============ MESAJLAR: ACİL UYARI ALTYAPISI ============ -->
+<!-- Görünüm değişse bile kalıcı kalması için app-shell dışında -->
+<audio id="acil-audio" src="assets/sound.mp3" preload="auto"></audio>
+<div id="acil-banner-host" class="acil-banner-host"></div>
+<div id="top-alert-host" class="top-alert-host"></div>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<section id="login-screen" class="login-screen">
+  <div class="login-bg">
+    <div class="login-bg__grid"></div>
+    <div class="login-bg__blob login-bg__blob--1"></div>
+    <div class="login-bg__blob login-bg__blob--2"></div>
+    <div class="login-bg__blob login-bg__blob--3"></div>
+    <div class="login-bg__route login-bg__route--1"></div>
+    <div class="login-bg__route login-bg__route--2"></div>
+    <i class='bx bx-package login-bg__icon login-bg__icon--1'></i>
+    <i class='bx bx-cube login-bg__icon login-bg__icon--2'></i>
+    <i class='bx bx-current-location login-bg__icon login-bg__icon--3'></i>
+    <i class='bx bxs-truck login-bg__icon login-bg__icon--4'></i>
+    <i class='bx bx-barcode login-bg__icon login-bg__icon--5'></i>
+    <i class='bx bx-cube-alt login-bg__icon login-bg__icon--6'></i>
+    <i class='bx bx-map-pin login-bg__icon login-bg__icon--7'></i>
+    <i class='bx bx-package login-bg__icon login-bg__icon--8'></i>
+    <div class="login-bg__dot login-bg__dot--1"></div>
+    <div class="login-bg__dot login-bg__dot--2"></div>
+    <div class="login-bg__dot login-bg__dot--3"></div>
+    <div class="login-bg__dot login-bg__dot--4"></div>
+    <div class="login-bg__dot login-bg__dot--5"></div>
+  </div>
+
+  <div class="login-panel">
+    <div class="login-brand">
+      <div class="login-brand__mark"><i class='bx bx-cube-alt'></i></div>
+      <div>
+        <h1>KargoTakip</h1>
+        <p>Depo ve kargo süreçlerinizi tek panelden yönetin</p>
+      </div>
+    </div>
+
+    <div class="role-select">
+      <p class="role-select__label">Giriş yapmak istediğiniz rolü seçin</p>
+      <div class="role-cards">
+        <button type="button" class="role-card" data-role="depo">
+          <i class='bx bx-box'></i>
+          <span>Depo Görevlisi</span>
+        </button>
+        <button type="button" class="role-card" data-role="admin">
+          <i class='bx bx-shield-quarter'></i>
+          <span>Admin</span>
+        </button>
+      </div>
+    </div>
+
+    <form id="login-form" class="login-form">
+      <p class="login-form__badge" id="selected-role-label"></p>
+      <div class="input-group">
+        <i class='bx bx-user'></i>
+        <input id="login-username" type="text" placeholder="Kullanıcı adı" autocomplete="username" />
+      </div>
+      <div class="input-group input-group--password">
+        <i class='bx bx-lock-alt'></i>
+        <input id="login-password" type="password" placeholder="Şifre" autocomplete="current-password" />
+        <button type="button" class="password-toggle-btn" id="password-toggle-btn" aria-label="Şifreyi göster/gizle">
+          <i class='bx bx-hide'></i>
+        </button>
+      </div>
+      <button type="submit" class="btn btn--primary btn--lg btn--block" id="login-submit-btn">
+        <i class='bx bx-log-in-circle'></i> Giriş Yap
+      </button>
+    </form>
+
+    <p class="login-hint"><i class='bx bx-info-circle'></i> Yönetici hesabı: kurulum sırasında Neon veritabanında oluşturduğunuz kullanıcı bilgileriyle giriş yapın.</p>
+  </div>
+</section>
+
+<!-- ============ APP SCREEN ============ -->
+<div id="app-screen" class="app-shell hidden">
+
+  <header class="topbar-mobile">
+    <button id="mobile-menu-btn" class="icon-btn" aria-label="Menü">
+      <i class='bx bx-menu'></i>
+    </button>
+    <div class="topbar-mobile__brand">
+      <i class='bx bx-cube-alt'></i>
+      <span class="topbar-mobile__title">KargoTakip</span>
+    </div>
+    <div class="topbar-mobile__spacer"></div>
+    <button type="button" class="notif-bell-btn" aria-label="Bildirimler">
+      <i class='bx bx-bell'></i>
+    </button>
+  </header>
+
+  <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar__brand">
+      <div class="sidebar__brand-mark"><i class='bx bx-cube-alt'></i></div>
+      <span>KargoTakip</span>
+      <button type="button" class="notif-bell-btn" aria-label="Bildirimler">
+        <i class='bx bx-bell'></i>
+      </button>
+    </div>
+    <div class="sidebar__role-badge" id="sidebar-role-badge"></div>
+    <nav class="sidebar__nav" id="sidebar-nav"></nav>
+    <div class="sidebar__spacer"></div>
+    <div class="sidebar__user" id="sidebar-user"></div>
+    <button class="sidebar__logout" id="logout-btn">
+      <i class='bx bx-log-out'></i>
+      <span>Çıkış Yap</span>
+    </button>
+  </aside>
+
+  <main class="main-content">
+    <div id="view-container" class="view-container"></div>
+  </main>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/authtoken.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/vendor/qrcode.js"></script>
+<script src="js/qrcode-handler.js"></script>
+<script src="js/mesajlar.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/main.js"></script>
+<script src="js/depo.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>

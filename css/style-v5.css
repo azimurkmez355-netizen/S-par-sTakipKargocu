@@ -1,0 +1,650 @@
+/* ============================================================
+   KargoTakip — v5 İyileştirmeler
+   Yeni tema renkleri, şifre göster/gizle, QR kodlar, Kargo Çıkışı
+   ============================================================ */
+
+/* ---- v5 Tema Renkleri ---- */
+:root {
+  --color-primary: #4361EE;        /* Elektrik mavi-mor (V7) */
+  --color-primary-dark: #2E45C4;
+  --color-primary-light: #EAEEFF;
+  --color-secondary: #C026D3;      /* Magenta */
+  --color-success: #14B876;        /* Zümrüt yeşil */
+  --color-warning: #FF9F1C;        /* Turuncu */
+  --color-danger: #F5384F;         /* Gül kırmızısı */
+  --color-info: #00B8D9;           /* Turkuaz */
+  --color-dark: #1F2937;           /* Koyu gri */
+  --color-light: #F3F4F6;          /* Açık gri */
+}
+
+/* ---- Login Formu: Şifre Göster/Gizle İkonu ---- */
+
+.input-group--password {
+  position: relative;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: color 0.2s ease;
+}
+
+.password-toggle-btn:hover {
+  color: var(--primary);
+}
+
+.password-toggle-btn i {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- Chat/Mesajlar Kutusu: Devre Dışı Kalma Sorunu Fix ---- */
+
+.message-input-group {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.message-input-group input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-alt);
+  color: var(--text);
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.message-input-group input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.message-input-group input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--surface-alt);
+  pointer-events: none;
+}
+
+/* Devre dışı kalma süresi sonrası otomatik aktifleştir */
+.message-input-group input.input-disabled {
+  transition: opacity 3s ease;
+}
+
+.message-input-group input.input-disabled.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.message-send-btn {
+  padding: 10px 18px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.message-send-btn:hover:not(:disabled) {
+  background: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow);
+}
+
+.message-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- QR Kod Tasarımı ---- */
+
+.qr-code-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: linear-gradient(135deg, #f8f9ff 0%, #fff0ff 100%);
+  border: 2px dashed var(--primary);
+  border-radius: var(--radius-md);
+  margin: 12px 0;
+}
+
+.qr-code-image {
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
+  background: white;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.qr-code-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+/* ---- v5: QR Göster butonu (kart üzerinde) + QR modal ---- */
+
+.qr-show-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin: 10px 0;
+  padding: 9px 12px;
+  background: linear-gradient(135deg, #f8f9ff 0%, #fff0ff 100%);
+  border: 1.5px dashed var(--primary);
+  border-radius: var(--radius-md);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.qr-show-btn:hover {
+  background: var(--primary);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.qr-show-btn i {
+  font-size: 16px;
+}
+
+.modal-box--qr {
+  max-width: 340px;
+  text-align: center;
+  padding: 24px;
+}
+
+.qr-modal h3 {
+  font-family: var(--font-mono);
+  letter-spacing: 0.5px;
+  margin-bottom: 16px;
+}
+
+.qr-modal__code {
+  display: flex;
+  justify-content: center;
+  background: #fff;
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.qr-modal__code svg {
+  width: 100%;
+  height: auto;
+  max-width: 260px;
+}
+
+.qr-modal__hint {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.urun-qr-icon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  margin-left: 6px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.urun-qr-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.urun-qr-icon:hover {
+  transform: scale(1.1);
+}
+
+/* ---- Kargo Çıkışı Sayfası ---- */
+
+.kargo-exit-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+@media (max-width: 1200px) {
+  .kargo-exit-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kargo-exit-panel,
+.kargo-exit-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.exit-scanner {
+  background: linear-gradient(135deg, #f0f4ff 0%, #fff0f0 100%);
+  border: 2px solid var(--primary-light);
+}
+
+.exit-scanner h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.exit-scanner h3 i {
+  color: var(--primary);
+  font-size: 24px;
+}
+
+.scanner-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.scanner-input-group input {
+  flex: 1;
+}
+
+.scanner-status {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  text-align: center;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scanner-status.success {
+  background: var(--green-light);
+  color: #047857;
+}
+
+.scanner-status.error {
+  background: var(--red-light);
+  color: #991B1B;
+}
+
+.exit-filter {
+  border: 1px solid var(--border);
+}
+
+.exit-filter h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.exit-filter h3 i {
+  color: var(--warning);
+}
+
+.scanned-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--surface-alt);
+  border-radius: var(--radius-md);
+}
+
+.empty-state-text {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px 12px;
+}
+
+/* ---- Kargo Çıkışı İstatistikleri ---- */
+
+.summary-card {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 20px;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .summary-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+.summary-stat {
+  padding: 12px;
+  background: var(--surface-alt);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.summary-stat:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+}
+
+.summary-stat__value {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--primary);
+  font-family: var(--font-mono);
+}
+
+.summary-stat__label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* ---- Çıkış Günlüğü ---- */
+
+.exit-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.exit-history-item {
+  padding: 12px;
+  background: var(--surface-alt);
+  border-left: 4px solid var(--success);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+}
+
+.exit-history-item:hover {
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transform: translateX(4px);
+}
+
+.exit-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.exit-item-ref {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.exit-item-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.exit-item-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.exit-item-body span {
+  font-size: 13px;
+}
+
+.exit-item-body .badge {
+  white-space: nowrap;
+}
+
+/* ---- Mini Stat Kartları (Kargo Çıkışı İçin) ---- */
+
+.mini-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-alt) 100%);
+  border-left: 4px solid var(--mini-color, var(--primary));
+}
+
+.mini-stat__icon {
+  font-size: 28px;
+  color: var(--mini-color, var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mini-stat__value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+
+.mini-stat__label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ---- Responsive İyileştirmeler ---- */
+
+@media (max-width: 768px) {
+  .kargo-exit-container {
+    grid-template-columns: 1fr;
+  }
+
+  .scanner-input-group {
+    flex-direction: column;
+  }
+
+  .exit-scanner input {
+    width: 100%;
+  }
+
+  .summary-card {
+    grid-template-columns: 1fr;
+  }
+
+  .exit-history {
+    max-height: 300px;
+  }
+
+  .message-input-group {
+    flex-direction: column;
+  }
+
+  .message-input-group button {
+    width: 100%;
+  }
+}
+
+/* ---- v6: Kargo Çıkışı — mobil modernizasyon ---- */
+/* 860px altında (uygulamanın genel mobil kırılma noktası) Kargo Çıkışı
+   sayfasını daha "app-like" ve şık hale getirir: daha büyük dokunma
+   alanları, öne çıkan tarayıcı kartı, ikonlu özet şeridi. */
+
+@media (max-width: 860px) {
+  .kargo-exit-container {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-top: 16px;
+  }
+
+  .exit-scanner {
+    border-radius: var(--radius-lg);
+    border-width: 1.5px;
+    padding: 18px 16px;
+    box-shadow: var(--shadow-md);
+  }
+
+  .exit-scanner h3 {
+    font-size: 15.5px;
+  }
+
+  .exit-scanner h3 i {
+    font-size: 22px;
+  }
+
+  .scanner-input-group {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .scanner-input-group input {
+    height: 48px;
+    font-size: 15px;
+    border-radius: var(--radius-md);
+  }
+
+  #start-scan-btn {
+    width: 100%;
+    height: 48px;
+    border-radius: var(--radius-md);
+    font-size: 14.5px;
+    justify-content: center;
+  }
+
+  .exit-filter {
+    border-radius: var(--radius-lg);
+    padding: 16px;
+  }
+
+  .exit-filter .btn--block {
+    height: 44px;
+    border-radius: var(--radius-md);
+  }
+
+  .exit-summary-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .exit-summary-row .mini-stat {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 10px;
+    border-radius: var(--radius-md);
+  }
+
+  .exit-summary-row .mini-stat__value {
+    font-size: 17px;
+  }
+
+  .exit-summary-row .mini-stat__label {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  #exit-log {
+    border-radius: var(--radius-lg);
+    padding: 16px;
+  }
+
+  .exit-history-item {
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+  }
+
+  .scanned-items-list {
+    border-radius: var(--radius-md);
+  }
+}
+
+/* ---- Animasyonlar ---- */
+
+@keyframes qrFade {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.qr-code-container {
+  animation: qrFade 0.3s ease-out;
+}
+
+@keyframes scannerPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+  }
+}
+
+.exit-scanner.scanning {
+  animation: scannerPulse 1.5s infinite;
+}
+
+/* ---- Scrollbar Stilleri ---- */
+
+.scanned-items-list::-webkit-scrollbar,
+.exit-history::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scanned-items-list::-webkit-scrollbar-track,
+.exit-history::-webkit-scrollbar-track {
+  background: var(--surface-alt);
+  border-radius: 3px;
+}
+
+.scanned-items-list::-webkit-scrollbar-thumb,
+.exit-history::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.scanned-items-list::-webkit-scrollbar-thumb:hover,
+.exit-history::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
