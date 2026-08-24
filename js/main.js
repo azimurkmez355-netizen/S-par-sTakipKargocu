@@ -359,7 +359,7 @@ const App = (() => {
                 .map(
                   (u) => `
                 <div class="urun-chip">
-                  <span class="urun-chip__ad">${UI.escapeHtml(u.urun_adi)}</span>
+                  <span class="urun-chip__ad">${u.adet && u.adet !== 1 ? `<strong>${u.adet}x</strong> ` : ""}${UI.escapeHtml(u.urun_adi)}</span>
                   <span class="urun-chip__sku">${UI.escapeHtml(u.sku)}</span>
                 </div>`
                 )

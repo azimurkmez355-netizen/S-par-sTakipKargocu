@@ -58,8 +58,8 @@
    pathLength="100" sayesinde JS tarafı gerçek çevre uzunluğunu bilmeden
    stroke-dashoffset'i doğrudan 0-100 aralığında ayarlayabiliyor
    (bkz. js/depo.js updateScanRing). Boşken (progress=0) halka görünmez,
-   2 saniyede saat yönünde dolup onaylanınca depo.js kamerayı durdurup
-   kutuyu tamamen gizliyor. */
+   kısa bir süre saat yönünde dolup onaylanınca depo.js kamerayı
+   durdurup kutuyu tamamen gizliyor. */
 .scanner-ring {
   position: absolute;
   inset: 0;
@@ -162,6 +162,45 @@
 .kargo-card__teslim-eden i { color: var(--green); font-size: 15px; flex-shrink: 0; }
 .kargo-card__teslim-eden strong { color: var(--text); }
 
+/* ---- "Kargo İçeriği" başlık satırındaki iki buton (Faturadan Ekle / Ürün Ekle) ---- */
+.form-label-row__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---- Ürün satırı: v8.7'de "Adet" alanı eklendi (2 sütun → 3 sütun) ----
+   style.css'teki orijinal .product-row__fields kuralı (1fr 1fr) yalnızca
+   Ürün Adı + SKU içindi; adet sayı kutusu SKU kadar geniş olmaya ihtiyaç
+   duymadığından üçüncü sütun daha dar tutuluyor. */
+.product-row__fields { grid-template-columns: 2fr 1fr 0.7fr; }
+
+/* ---- "Faturadan Ekle" — 2 seçenekli modal (otomatik / elle) ---- */
+.modal-box--invoice { max-width: 460px; }
+.invoice-modal-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+.invoice-modal-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-alt);
+  text-align: left;
+  transition: all 0.15s ease;
+}
+.invoice-modal-option i { font-size: 22px; color: var(--primary); }
+.invoice-modal-option strong { font-size: 14px; color: var(--text); }
+.invoice-modal-option span { font-size: 12.5px; color: var(--text-muted); line-height: 1.4; }
+.invoice-modal-option:hover { border-color: var(--primary); background: var(--primary-light); }
+
 @media (max-width: 640px) {
   .scanner-camera-wrap { max-width: 100%; }
+
+  /* Dar ekranda 3 sütun sıkışır: Ürün Adı tam satırı kaplasın,
+     SKU + Adet altında yan yana kalsın. */
+  .product-row__fields { grid-template-columns: 1fr 1fr; }
+  .product-row__field:first-child { grid-column: 1 / -1; }
 }

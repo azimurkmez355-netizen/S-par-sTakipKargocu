@@ -145,3 +145,87 @@ DOKUNULMADI: js/auth.js, js/authtoken.js, js/api.js, js/mesajlar.js,
           js/notifications.js, js/ui.js, css/style.css,
           css/style-v5.css, css/theme-v7.css — login/güvenlik modeli
           ve mesajlaşma/bildirim akışları değiştirilmedi.
+
+## v8.7 — Fatura OCR ile otomatik ürün/alıcı doldurma
+
+Depo görevlisi artık her kargoda alıcı adını ve ürünleri (ad/SKU/adet)
+elle yazmak zorunda değil. "Kargo İçeriği" başlığının yanına "Faturadan
+Ekle" butonu eklendi; tıklanınca iki seçenekli bir modal açılıyor:
+
+- **Faturadan Otomatik Çek** — fatura fotoğrafı seçtirir (mobilde
+  kamera doğrudan açılır), `js/invoice-ocr.js`'teki `InvoiceOcr` modülü
+  Tesseract.js (OCR) ile görseli okuyup alıcı adını ve ürün satırlarını
+  çıkarmaya çalışır, form alanlarını doldurur.
+- **Elle Gir** — modalı kapatır, eskisi gibi elle doldurmaya devam
+  edilir.
+
+Çıkarma kuralları (kullanıcının verdiği tarife birebir):
+- Alıcı adı: "SAYIN" kelimesinden sonraki ilk 2 kelime.
+- Ürün kodu: "Mal Hizmet Kodu" sütunu, ürün adı: "Mal Hizmet Adı"
+  sütunu, adet: "Miktar" sütunundaki sayı.
+- Bir faturada birden çok ürün olabilir — her biri ayrı bir ürün
+  satırı olarak eklenir (`clearProductRows()` ile form sıfırlanıp
+  `addProductRow(prefill)` ile OCR sonucundan tek tek dolduruluyor).
+
+**Önemli — bu bir OCR, QR okuma gibi hatasız değil:** yanlış okuma
+sessizce olabilir (özellikle karışık harf/rakam içeren SKU'larda).
+Bu yüzden çıkarılan hiçbir alan "kilitli" değildir — hepsi normal,
+düzenlenebilir form alanlarına yazılır, kaydetmeden önce görevli
+gözden geçirip elle düzeltebilir. Okuma tamamen başarısız olursa (ne
+alıcı ne ürün bulunamazsa) açık bir hata gösterilip elle girmeye
+yönlendirilir.
+
+Sütun ayrıştırması **aralık bazlı** yapılıyor: fatura tablosunun
+başlık satırından ("...Kodu" ve "Miktar" kelimelerinin x-konumundan)
+iki sütun sınırı çıkarılıyor, her ürün satırındaki kelimeler bu
+sınırlara göre kodu/adı/miktar kovalarına dağıtılıyor. Tek referans
+noktasına en yakın kelimeyi seçmek yerine aralık kullanılmasının
+sebebi: "Adı" sütunu geniş olduğundan (uzun ürün adları), sütun
+sınırına yakın kelimeler yanlış sütuna düşüyordu — hem sentetik testte
+hem bu turda gerçek uygulama üzerinden (gerçek Tesseract worker + CDN
+dil verisiyle) doğrulandı. **Bu yaklaşımın önkoşulu, başlık satırı ile
+veri satırlarının sütunlarının x-eksende hizalı olmasıdır** — gerçek
+faturalarda (tablo hücreleriyle basılı) bu normalde sağlanıyor; test
+sırasında satırları elle, hizasız bir fontla yazdığımda sütun kayması
+gözlemlendi, hizalı bir tabloyla (gerçek fatura tablosunu taklit eden
+monospace test görseli) tekrar denendiğinde alıcı adı + 2 ürünün tümü
+(ad/SKU/adet) birebir doğru çıktı.
+
+Tesseract.js çekirdeği (WASM, ~7MB) ve dil verisi (~2MB) bilinçli
+olarak **vendor edilmedi** — repoyu şişirmemek için sadece bu özellik
+ilk kullanıldığında Tesseract.js'in varsayılan CDN'inden bir kerelik
+indiriliyor (tarayıcı sonrasını önbelleğe alır). Sadece küçük ana
+kütüphane (`js/vendor/tesseract.min.js`, ~65KB) vendor edildi. QR/
+barkod okuma bundan etkilenmiyor, tamamen yerel kalmaya devam ediyor.
+
+`kargo_urunleri` tablosuna yeni `adet INTEGER NOT NULL DEFAULT 1`
+kolonu eklendi (`NEON_TAM_KURULUM.sql` sıfırdan kurulumlar için
+güncellendi; **canlı veritabanına ayrıca, veri kaybetmeyen bir
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` ile eklenmesi gerekiyor** —
+bkz. sohbette verilen SQL). Kart görünümünde (`App.kargoCard`) adet
+1'den farklıysa ürün çipinin başına "3x" gibi bir önek ekleniyor.
+
+Doğrulama: yerelde gerçek uygulama üzerinden (statik sunucu +
+canlı Neon "Kargocuu" DB'ye giriş yapılarak), gerçek dosya-seçim
+olayı tetiklenerek uçtan uca test edildi — modal açılma/kapanma,
+3 sütunlu ürün satırı CSS'i, "Ürün Ekle"/satır silme/yeniden
+numaralama, ve monospace (hizalı sütunlu) sentetik fatura görseliyle
+OCR'ın alıcı adı + çoklu ürün + adet'i birebir doğru çıkarması —
+hepsi doğrulandı. **Kullanıcının kendi telefonuyla çektiği gerçek
+fatura fotoğraflarındaki doğruluk henüz doğrulanmadı** (bu ortamda
+kullanıcının daha önce sohbete yapıştırdığı fatura görsellerine dosya
+olarak erişilemiyor) — ilk gerçek kullanımda görevlinin çıkan sonucu
+mutlaka kontrol etmesi öneriliyor.
+
+---
+Değişen/eklenen dosyalar (v8.7):
+  YENİ  : js/invoice-ocr.js, js/vendor/tesseract.min.js
+  DÜZEN : index.html (2 yeni script tag), js/depo.js ("Faturadan Ekle"
+          butonu + modal, `addProductRow`'a adet alanı ve prefill
+          desteği, `onSubmitKargo` ürün insert'i adet'i de gönderiyor),
+          js/main.js (kargoCard ürün çipinde adet öneki),
+          css/style-v8.css (modal + 3 sütunlu ürün satırı stilleri),
+          NEON_TAM_KURULUM.sql (kargo_urunleri.adet, yeni kurulumlar
+          için)
+DOKUNULMADI: js/qr-scanner.js ve tüm QR/barkod akışı — OCR tamamen
+          ayrı, isteğe bağlı bir yol; QR zorunluluğu değişmedi.

@@ -132,11 +132,17 @@ const Depo = (() => {
         <div class="form-section">
           <div class="form-label-row">
             <label class="form-label"><i class='bx bx-cube'></i> Kargo İçeriği (Ürünler)</label>
-            <button type="button" id="add-product-btn" class="btn btn--ghost btn--sm">
-              <i class='bx bx-plus'></i> Ürün Ekle
-            </button>
+            <div class="form-label-row__actions">
+              <button type="button" id="add-invoice-btn" class="btn btn--ghost btn--sm">
+                <i class='bx bx-receipt'></i> Faturadan Ekle
+              </button>
+              <button type="button" id="add-product-btn" class="btn btn--ghost btn--sm">
+                <i class='bx bx-plus'></i> Ürün Ekle
+              </button>
+            </div>
           </div>
           <div id="product-rows" class="product-rows"></div>
+          <input type="file" id="invoice-input" accept="image/*" capture="environment" hidden />
         </div>
 
         <div class="form-section">
@@ -194,7 +200,9 @@ const Depo = (() => {
     addProductRow();
     paintMyStats(token, "my-stats");
 
-    document.getElementById("add-product-btn").addEventListener("click", addProductRow);
+    document.getElementById("add-product-btn").addEventListener("click", () => addProductRow());
+    document.getElementById("add-invoice-btn").addEventListener("click", openInvoiceModal);
+    document.getElementById("invoice-input").addEventListener("change", onInvoiceFileSelected);
     document.getElementById("photo-input").addEventListener("change", onPhotoSelected);
     document.getElementById("etiket-input").addEventListener("change", onEtiketSelected);
     document.getElementById("etiket-start-btn").addEventListener("click", () => startEtiketScan(token));
@@ -219,7 +227,9 @@ const Depo = (() => {
     });
   }
 
-  function addProductRow() {
+  /** prefill verilirse (fatura OCR'ından) alanlar önceden doldurulmuş
+   *  gelir — kullanıcı yine de kaydetmeden önce düzeltebilir. */
+  function addProductRow(prefill) {
     productRowCount += 1;
     const id = `p${productRowCount}-${Date.now()}`;
     const row = document.createElement("div");
@@ -242,8 +252,17 @@ const Depo = (() => {
           <label>SKU</label>
           <input type="text" class="input product-sku" placeholder="Örn. SKU-00123" required />
         </div>
+        <div class="product-row__field product-row__field--adet">
+          <label>Adet</label>
+          <input type="number" class="input product-adet" min="1" step="1" value="1" required />
+        </div>
       </div>
     `;
+    if (prefill) {
+      row.querySelector(".product-name").value = prefill.urun_adi || "";
+      row.querySelector(".product-sku").value = prefill.sku || "";
+      row.querySelector(".product-adet").value = prefill.adet && prefill.adet > 0 ? prefill.adet : 1;
+    }
     row.querySelector(".row-remove-btn").addEventListener("click", () => {
       const rows = document.querySelectorAll("#product-rows .product-row");
       if (rows.length <= 1) {
@@ -255,6 +274,93 @@ const Depo = (() => {
     });
     document.getElementById("product-rows").appendChild(row);
     renumberProductRows();
+  }
+
+  /** Mevcut tüm ürün satırlarını temizler (fatura OCR ile yeniden
+   *  doldurmadan önce, formun varsayılan boş satırının üstüne
+   *  eklemek yerine sıfırdan başlamak için). */
+  function clearProductRows() {
+    document.getElementById("product-rows").innerHTML = "";
+    productRowCount = 0;
+  }
+
+  /* ---------------- Faturadan Ekle (OCR ile otomatik doldurma) ----------------
+     v8.7: Fatura fotoğrafından alıcı adı + ürün satırlarını (kod/ad/adet)
+     çıkarmaya çalışır (js/invoice-ocr.js, Tesseract.js tabanlı). QR/barkod
+     okumanın aksine bu OCR'dır — hata düzeltmesi YOKTUR, yanlış okuma
+     sessizce olabilir. Bu yüzden sonuç HER ZAMAN normal, düzenlenebilir
+     form alanlarına yazılır; kaydetmeden önce görevli gözden geçirmelidir. */
+
+  function openInvoiceModal() {
+    UI.openModal(
+      `
+      <button class="modal-close-x" data-close-modal><i class='bx bx-x'></i></button>
+      <h3 class="modal-title">Ürünleri Nasıl Eklemek İstersiniz?</h3>
+      <p class="modal-text">Faturanın fotoğrafını yükleyin — alıcı adı ve ürünler otomatik doldurulmaya çalışılsın. Okuma hatalı olabilir, kaydetmeden önce mutlaka kontrol edin.</p>
+      <div class="invoice-modal-options">
+        <button type="button" class="invoice-modal-option" id="invoice-auto-btn">
+          <i class='bx bx-receipt'></i>
+          <strong>Faturadan Otomatik Çek</strong>
+          <span>Fatura fotoğrafı yükle, alıcı ve ürünler otomatik dolsun</span>
+        </button>
+        <button type="button" class="invoice-modal-option" data-close-modal>
+          <i class='bx bx-edit-alt'></i>
+          <strong>Elle Gir</strong>
+          <span>Ürünleri kendim tek tek gireceğim</span>
+        </button>
+      </div>
+    `,
+      { size: "modal-box--invoice" }
+    );
+    document.getElementById("invoice-auto-btn").addEventListener("click", () => {
+      UI.closeModal();
+      document.getElementById("invoice-input").click();
+    });
+  }
+
+  async function onInvoiceFileSelected(e) {
+    const file = (e.target.files || [])[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (typeof InvoiceOcr === "undefined" || typeof Tesseract === "undefined") {
+      UI.toast("Fatura okuma özelliği yüklenemedi. Ürünleri elle girebilirsiniz.", "error");
+      return;
+    }
+
+    UI.toast("Fatura okunuyor... İlk kullanımda biraz sürebilir.", "info", 6000);
+    UI.setLoading(true);
+    try {
+      const result = await InvoiceOcr.extractFromImageFile(file);
+
+      if (result.aliciAdSoyad) {
+        document.getElementById("alici-adsoyad").value = result.aliciAdSoyad;
+      }
+
+      if (result.urunler.length) {
+        clearProductRows();
+        result.urunler.forEach((p) => addProductRow(p));
+      }
+
+      if (!result.aliciAdSoyad && !result.urunler.length) {
+        UI.toast(
+          "Faturadan bir şey okunamadı. Fotoğrafı net, tam ve iyi ışıkta çekip tekrar deneyin ya da elle girin.",
+          "error"
+        );
+      } else {
+        UI.toast(
+          `Faturadan ${result.aliciAdSoyad ? "alıcı adı" : ""}${result.aliciAdSoyad && result.urunler.length ? " ve " : ""}${
+            result.urunler.length ? result.urunler.length + " ürün" : ""
+          } dolduruldu — lütfen KONTROL EDİN.`,
+          "success",
+          6000
+        );
+      }
+    } catch (err) {
+      UI.toast(err.message || "Fatura okunamadı. Ürünleri elle girebilirsiniz.", "error");
+    } finally {
+      UI.setLoading(false);
+    }
   }
 
   /** Telefon kameralarının ham (birkaç MB'lık) fotoğraflarını, DB/liste
@@ -496,7 +602,8 @@ const Depo = (() => {
     const products = rows
       .map((r) => ({
         urun_adi: r.querySelector(".product-name").value.trim(),
-        sku: r.querySelector(".product-sku").value.trim()
+        sku: r.querySelector(".product-sku").value.trim(),
+        adet: Math.max(1, parseInt(r.querySelector(".product-adet").value, 10) || 1)
       }))
       .filter((p) => p.urun_adi && p.sku);
 
@@ -534,7 +641,7 @@ const Depo = (() => {
 
       await Api.insert(
         "kargo_urunleri",
-        products.map((p) => ({ kargo_id: kargo.id, urun_adi: p.urun_adi, sku: p.sku }))
+        products.map((p) => ({ kargo_id: kargo.id, urun_adi: p.urun_adi, sku: p.sku, adet: p.adet }))
       );
 
       if (photoBuffer.length) {

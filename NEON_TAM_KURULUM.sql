@@ -65,7 +65,8 @@ CREATE TABLE kargo_urunleri (
   id BIGSERIAL PRIMARY KEY,
   kargo_id BIGINT NOT NULL REFERENCES kargolar(id) ON DELETE CASCADE,
   urun_adi TEXT NOT NULL,
-  sku TEXT NOT NULL
+  sku TEXT NOT NULL,
+  adet INTEGER NOT NULL DEFAULT 1
 );
 
 -- ============================================================
