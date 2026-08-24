@@ -5,6 +5,31 @@ kaldırıp, kargo firmasının **gerçek** etiketindeki QR kodu okuyan bir
 sisteme geçiyor. Ayrıca depo görevlilerine "Tüm Kargolar" ekranı ve
 kart üzerinde "kim teslim etti" bilgisi eklendi.
 
+## v8.1 düzeltmesi — asıl sorun "QR" değil Data Matrix'miş
+
+Canlı denemede etiketler hiç okunmadı. İncelenen örnek etiket
+fotoğraflarında klasik QR'ın üç köşe "gözü" (iç içe kareler) yoktu —
+bu desen, kargo firmalarının etiketlerde sıklıkla kullandığı **Data
+Matrix** formatına işaret ediyor. `jsQR` sadece ISO 18004 QR okuyabilen
+bir kütüphane olduğu için bu etiketleri hiçbir çözünürlükte okuyamazdı.
+
+Çözüm: `js/vendor/jsqr.js` kaldırıldı, yerine `js/vendor/zxing.js`
+(@zxing/library) vendor edildi — QR + Data Matrix + Aztec + PDF417 +
+yaygın 1D barkodları tek okuyucuda deniyor, format önceden bilinmese
+de otomatik tanıyor. `js/qr-scanner.js`'in dış API'si (decodeFromImageFile/
+startLive/stopLive/resumeLive) değişmedi, sadece iç okuma motoru
+değişti — `depo.js` tarafında herhangi bir değişiklik gerekmedi.
+Ayrıca canlı taramada kameranın TÜM geniş karesi yerine, kullanıcının
+ekranda gerçekten gördüğü orta-kare bölge kırpılıp taranıyor (önceki
+düzeltme) ve canlı format kümesi sadece QR+Data Matrix'e daraltılarak
+(hız için) tutuldu; etiket yüklemede tüm formatlar + TRY_HARDER ile
+en yüksek doğruluk hedefleniyor.
+
+Yerelde hem sentetik Data Matrix hem QR test görselleriyle
+(`bwip-js` ile üretilip gerçek uygulama modülü üzerinden) doğrulandı.
+Gerçek termal yazıcı etiketleri üzerinde nihai doğrulama kullanıcının
+kendi cihazında yapılmalı.
+
 ## 1) Kaldırılan eski QR sistemi
 
 `js/vendor/qrcode.js` (QR **üretici** kütüphane) ve `js/qrcode-handler.js`
