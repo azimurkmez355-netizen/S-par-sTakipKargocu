@@ -13,7 +13,7 @@
    girebilirsiniz.
    ============================================================ */
 const CONFIG = {
-  DATA_API_URL: "https://ep-morning-flower-ayb1rg5l.apirest.c-5.us-east-2.aws.neon.tech/neondb/rest/v1",
+  DATA_API_URL: "https://ep-withered-star-aybr2qce.apirest.c-5.us-east-2.aws.neon.tech/neondb/rest/v1",
   AUTH_URL: null, // null bırakılırsa DATA_API_URL'den otomatik türetilir
   
   // v5 Tema Renkleri

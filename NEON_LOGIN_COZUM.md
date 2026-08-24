@@ -38,15 +38,17 @@
 
 ### ✅ ADIM 3: API URL Kontrol Et
 
-1. Neon Console > **"Data API"** > **"API"** tab
-2. "API URL" bölümünde URL'i kopyala
-   ```
-   https://ep-morning-flower-ayb1rg5l.apirest.c-5.us-east-2.aws.neon.tech/neondb/rest/v1
-   ```
-3. KargoTakipV5_FIXED/js/config.js açıp 16. satırda paste et:
-   ```javascript
-   DATA_API_URL: "https://ep-morning-flower-ayb1rg5l.apirest.c-5.us-east-2.aws.neon.tech/neondb/rest/v1",
-   ```
+⚠️ Bu adresin `ep-...` kısmı, Neon branch/proje her yenilendiğinde
+değişebiliyor (2026-08-24'te tam da bu yüzden kargo kaydetme hatası
+yaşandı — uygulama eski/yanlış bir endpoint'e bakıyordu). Aşağıdaki
+adres örnektir, HER ZAMAN kendi Neon Console'unuzdaki güncel değeri
+kullanın:
+
+1. Neon Console > sol üstteki **branch seçicide** doğru branch'te
+   olduğunuzdan emin olun, sonra **"Data API"** > **"API"** tab
+2. "API URL" bölümünde URL'i kopyalayın (şu an: `https://ep-withered-star-aybr2qce.apirest.c-5.us-east-2.aws.neon.tech/neondb/rest/v1`)
+3. `js/config.js` açıp `DATA_API_URL` satırına yapıştırın — kopyaladığınız
+   adresle **birebir aynı** olmalı
 
 ---
 
