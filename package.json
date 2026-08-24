@@ -1,0 +1,12 @@
+{
+  "name": "kargotakip",
+  "version": "8.0.0",
+  "private": true,
+  "description": "KargoTakip — Depo ve Kargo Yönetim Paneli (statik site, Neon Data API ile)",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
