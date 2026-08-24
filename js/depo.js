@@ -44,11 +44,12 @@ const Depo = (() => {
   }
 
   function render(key) {
-    // "yeni" (etiket taraması) ve "cikis" (çıkış taraması) ekranlarının
-    // her ikisi de kendi video elementi için QrScanner.startLive'ı yeniden
-    // çağırıp önceki akışı otomatik kapatıyor; diğer ekranlara geçişte
-    // kamerayı burada açıkça durdurmamız gerekiyor.
-    if (key !== "cikis" && key !== "yeni") QrScanner.stopLive();
+    // Sadece "cikis" (Kargo Çıkışı) ekranı otomatik açılıyor ve kendi
+    // video elementi için QrScanner.startLive'ı yeniden çağırıp önceki
+    // akışı otomatik kapatıyor. "yeni" (Yeni Kargo Ekle) artık kamerayı
+    // otomatik açmıyor (v8.5) — oraya geçişte de önceki akış varsa
+    // burada açıkça durdurulmalı.
+    if (key !== "cikis") QrScanner.stopLive();
     App.setActiveNav(key);
     if (key === "liste") renderListView();
     else if (key === "tumu") renderAllKargolarView();
@@ -153,12 +154,9 @@ const Depo = (() => {
 
         <div class="form-section">
           <label class="form-label"><i class='bx bx-qr-scan'></i> Kargo Etiketi (QR)</label>
-          <p class="form-hint">Kargonun üzerindeki etiketi kameraya gösterin — QR kod algılanınca otomatik onaylanır, tıklamaya gerek yok. Bu QR, kargo çıkışında teslimatı eşleştirmek için kullanılır ve her kargoda zorunludur.</p>
+          <p class="form-hint">"QR'ı Başlat"a basıp etiketi kareye tam ortalayın; ışıltılı halka 2 saniyede dolunca otomatik onaylanır. Bu QR, kargo çıkışında teslimatı eşleştirmek için kullanılır ve her kargoda zorunludur.</p>
           <div class="etiket-uploader">
-            <div class="scanner-camera-wrap" id="etiket-camera-wrap">
-              <video id="etiket-video" class="scanner-video" playsinline muted></video>
-              <div class="scanner-camera-frame"></div>
-            </div>
+            ${scannerCameraWrapHtml("etiket")}
             <div id="etiket-status" class="scanner-status"></div>
             <div id="etiket-preview" class="etiket-preview"></div>
             <div class="etiket-uploader__actions">
@@ -199,6 +197,7 @@ const Depo = (() => {
     document.getElementById("add-product-btn").addEventListener("click", addProductRow);
     document.getElementById("photo-input").addEventListener("change", onPhotoSelected);
     document.getElementById("etiket-input").addEventListener("change", onEtiketSelected);
+    document.getElementById("etiket-start-btn").addEventListener("click", () => startEtiketScan(token));
     document.getElementById("etiket-rescan-btn").addEventListener("click", () => startEtiketScan(token));
     document.querySelectorAll(".firma-card").forEach((btn) =>
       btn.addEventListener("click", () => {
@@ -208,7 +207,9 @@ const Depo = (() => {
     );
     document.getElementById("kargo-form").addEventListener("submit", onSubmitKargo);
 
-    startEtiketScan(token);
+    // v8.5: kamera artık otomatik açılmıyor — kullanıcı "QR'ı Başlat"a
+    // basana kadar kutu boşta (start butonlu) görünümde bekliyor.
+    showScannerIdle("etiket");
   }
 
   function renumberProductRows() {
@@ -256,16 +257,42 @@ const Depo = (() => {
     renumberProductRows();
   }
 
-  function onPhotoSelected(e) {
-    const files = Array.from(e.target.files || []);
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        photoBuffer.push({ name: file.name, dataUrl: reader.result });
-        renderPhotoPreview();
+  /** Telefon kameralarının ham (birkaç MB'lık) fotoğraflarını, DB/liste
+   *  sorgularını şişirmemek için kaydetmeden önce küçültür. */
+  function downscaleImageFile(file, maxDim, quality) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
       };
-      reader.readAsDataURL(file);
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Görsel açılamadı."));
+      };
+      img.src = url;
     });
+  }
+
+  async function onPhotoSelected(e) {
+    const files = Array.from(e.target.files || []);
+    for (const file of files) {
+      try {
+        const dataUrl = await downscaleImageFile(file, 1200, 0.75);
+        photoBuffer.push({ name: file.name, dataUrl });
+        renderPhotoPreview();
+      } catch {
+        UI.toast(`"${file.name}" yüklenemedi.`, "error");
+      }
+    }
     e.target.value = "";
   }
 
@@ -296,7 +323,60 @@ const Depo = (() => {
      okuyucu gibi kamerayı sürekli tarayıp QR'ı görür görmez otomatik
      onaylayan akışa geçildi (Kargo Çıkışı ekranındaki QrScanner.startLive
      ile aynı motor). Kamera açılmazsa dosyadan yükleme her zaman
-     görünür bir yedek olarak kalıyor (onEtiketSelected). */
+     görünür bir yedek olarak kalıyor (onEtiketSelected).
+     v8.5: kamera artık otomatik açılmıyor — ortadaki "QR'ı Başlat"
+     butonuna basılınca başlıyor. Ayrıca tek karede anında onaylamak
+     yerine, QR karede iyi konumlanmış halde HOLD_DURATION_MS boyunca
+     kalırsa onaylanıyor; ilerleme kare çevresindeki ışıltılı halkada
+     gösteriliyor (Kargo Çıkışı ekranıyla ortak: scannerCameraWrapHtml/
+     updateScanRing). */
+
+  function scannerCameraWrapHtml(prefix) {
+    return `
+      <div class="scanner-camera-wrap" id="${prefix}-camera-wrap">
+        <video id="${prefix}-video" class="scanner-video" playsinline muted hidden></video>
+        <svg class="scanner-ring" viewBox="0 0 100 100" preserveAspectRatio="none" id="${prefix}-ring" hidden>
+          <rect x="4" y="4" width="92" height="92" rx="14" class="scanner-ring__bg" pathLength="100"></rect>
+          <rect x="4" y="4" width="92" height="92" rx="14" class="scanner-ring__fg" pathLength="100" id="${prefix}-ring-fg"></rect>
+        </svg>
+        <button type="button" class="scanner-start-btn" id="${prefix}-start-btn">
+          <i class='bx bx-camera'></i>
+          <span>QR'ı Başlat</span>
+        </button>
+      </div>`;
+  }
+
+  /** Halkanın dolum oranını günceller (0-1). pathLength=100 sayesinde
+   *  şeklin gerçek çevre uzunluğundan bağımsız çalışır. */
+  function updateScanRing(prefix, progress) {
+    const fg = document.getElementById(`${prefix}-ring-fg`);
+    if (fg) fg.style.strokeDashoffset = String(100 * (1 - Math.max(0, Math.min(1, progress))));
+  }
+
+  /** Kamera kutusunu "başlamayı bekliyor" görünümüne döndürür: video/halka
+   *  gizli, ortadaki başlat butonu görünür. */
+  function showScannerIdle(prefix) {
+    const video = document.getElementById(`${prefix}-video`);
+    const ring = document.getElementById(`${prefix}-ring`);
+    const startBtn = document.getElementById(`${prefix}-start-btn`);
+    const wrap = document.getElementById(`${prefix}-camera-wrap`);
+    if (wrap) wrap.hidden = false;
+    if (video) video.hidden = true;
+    if (ring) ring.hidden = true;
+    if (startBtn) startBtn.hidden = false;
+    updateScanRing(prefix, 0);
+  }
+
+  /** Kamera kutusunu "canlı tarıyor" görünümüne döndürür: video/halka
+   *  görünür, başlat butonu gizli. */
+  function showScannerLive(prefix) {
+    const video = document.getElementById(`${prefix}-video`);
+    const ring = document.getElementById(`${prefix}-ring`);
+    const startBtn = document.getElementById(`${prefix}-start-btn`);
+    if (video) video.hidden = false;
+    if (ring) ring.hidden = false;
+    if (startBtn) startBtn.hidden = true;
+  }
 
   function captureVideoFrameJPEG(video, maxDim) {
     const vw = video.videoWidth || maxDim;
@@ -324,25 +404,30 @@ const Depo = (() => {
     if (cameraWrap) cameraWrap.hidden = false;
     if (previewEl) previewEl.innerHTML = "";
     if (rescanBtn) rescanBtn.hidden = true;
+    showScannerLive("etiket");
 
     statusEl.className = "scanner-status loading";
     statusEl.innerHTML = `<i class='bx bx-loader-alt bx-spin'></i> Kamera açılıyor...`;
 
     try {
-      await QrScanner.startLive(video, (text) => {
-        if (!App.isCurrent(token)) return;
-        onEtiketDetected(token, text, video);
-      });
+      await QrScanner.startLive(
+        video,
+        (text) => {
+          if (!App.isCurrent(token)) return;
+          onEtiketDetected(token, text, video);
+        },
+        (progress) => updateScanRing("etiket", progress)
+      );
       if (!App.isCurrent(token)) {
         QrScanner.stopLive();
         return;
       }
       statusEl.className = "scanner-status";
-      statusEl.innerHTML = `<i class='bx bx-scan'></i> Kamera açık — etiketi çerçeveye gösterin, otomatik algılanacak.`;
+      statusEl.innerHTML = `<i class='bx bx-scan'></i> Etiketi kareye ortalayıp 2 saniye sabit tutun — halka dolunca onaylanır.`;
     } catch (err) {
-      if (cameraWrap) cameraWrap.hidden = true;
+      showScannerIdle("etiket");
       statusEl.className = "scanner-status error";
-      statusEl.innerHTML = `<i class='bx bx-error-circle'></i> Kamera açılamadı (izin reddedilmiş olabilir). Aşağıdan dosya olarak yükleyebilirsiniz.`;
+      statusEl.innerHTML = `<i class='bx bx-error-circle'></i> Kamera açılamadı (izin reddedilmiş olabilir). "QR'ı Başlat"a tekrar basıp izin verin ya da aşağıdan dosya olarak yükleyin.`;
     }
   }
 
@@ -386,19 +471,20 @@ const Depo = (() => {
       if (!text) {
         etiketState = { text: null, previewDataUrl: null };
         statusEl.className = "scanner-status error";
-        statusEl.innerHTML = `<i class='bx bx-error-circle'></i> QR okunamadı. Etiketi net, tam ve iyi ışıkta çekip tekrar yükleyin.`;
+        statusEl.innerHTML = `<i class='bx bx-error-circle'></i> QR okunamadı. Etiketi net, tam ve iyi ışıkta çekip tekrar yükleyin ya da kamerayla deneyin.`;
+        document.getElementById("etiket-rescan-btn").hidden = false;
         return;
       }
       etiketState = { text, previewDataUrl };
       statusEl.className = "scanner-status success";
       statusEl.innerHTML = `<i class='bx bx-check-circle'></i> QR başarıyla okundu.`;
       previewEl.innerHTML = `<img src="${previewDataUrl}" alt="Kargo etiketi" />`;
-      const rescanBtn = document.getElementById("etiket-rescan-btn");
-      if (rescanBtn) rescanBtn.hidden = false;
+      document.getElementById("etiket-rescan-btn").hidden = false;
     } catch (err) {
       etiketState = { text: null, previewDataUrl: null };
       statusEl.className = "scanner-status error";
       statusEl.innerHTML = `<i class='bx bx-error-circle'></i> ${UI.escapeHtml(err.message || "Etiket okunamadı.")}`;
+      document.getElementById("etiket-rescan-btn").hidden = false;
     }
   }
 
@@ -498,7 +584,7 @@ const Depo = (() => {
     try {
       const data = await Api.select(
         "kargolar",
-        `ekleyen_kullanici_id=eq.${currentUser.id}&select=*,kargo_urunleri(*),kargo_fotograflari(*)&order=olusturma_tarihi.desc`
+        `ekleyen_kullanici_id=eq.${currentUser.id}&select=${App.KARGO_LIST_SELECT}&order=olusturma_tarihi.desc`
       );
       if (!App.isCurrent(token)) return;
       if (!data.length) {
@@ -532,10 +618,7 @@ const Depo = (() => {
         <div class="kargo-exit-panel">
           <div class="card exit-scanner" id="exit-scanner-card">
             <h3><i class='bx bx-qr'></i> QR Kod Okut</h3>
-            <div class="scanner-camera-wrap">
-              <video id="scanner-video" class="scanner-video" playsinline muted></video>
-              <div class="scanner-camera-frame"></div>
-            </div>
+            ${scannerCameraWrapHtml("scanner")}
             <div class="scanner-input-group">
               <input
                 type="text"
@@ -544,9 +627,6 @@ const Depo = (() => {
                 placeholder="Kamera açılmazsa QR değerini buraya yazıp Enter'a basın..."
                 autocomplete="off"
               />
-              <button type="button" id="start-scan-btn" class="btn btn--primary">
-                <i class='bx bx-camera'></i> Kamerayı Başlat
-              </button>
             </div>
             <div id="scanner-status" class="scanner-status"></div>
           </div>
@@ -595,7 +675,7 @@ const Depo = (() => {
       }
     });
 
-    document.getElementById("start-scan-btn").addEventListener("click", () => {
+    document.getElementById("scanner-start-btn").addEventListener("click", () => {
       startCameraScan(token);
     });
 
@@ -613,24 +693,27 @@ const Depo = (() => {
   async function startCameraScan(token) {
     const statusEl = document.getElementById("scanner-status");
     const video = document.getElementById("scanner-video");
-    const card = document.getElementById("exit-scanner-card");
     if (!video || !statusEl) return;
+    showScannerLive("scanner");
     try {
-      await QrScanner.startLive(video, (text) => {
-        if (!App.isCurrent(token)) return;
-        handleQrScan(text, token);
-      });
+      await QrScanner.startLive(
+        video,
+        (text) => {
+          if (!App.isCurrent(token)) return;
+          handleQrScan(text, token);
+        },
+        (progress) => updateScanRing("scanner", progress)
+      );
       if (!App.isCurrent(token)) {
         QrScanner.stopLive();
         return;
       }
-      if (card) card.classList.add("scanning");
       statusEl.className = "scanner-status";
-      statusEl.innerHTML = `<i class='bx bx-scan'></i> Kamera açık — QR kodu çerçeveye gösterin.`;
+      statusEl.innerHTML = `<i class='bx bx-scan'></i> Etiketi kareye ortalayıp 2 saniye sabit tutun — halka dolunca onaylanır.`;
     } catch (err) {
-      if (card) card.classList.remove("scanning");
+      showScannerIdle("scanner");
       statusEl.className = "scanner-status error";
-      statusEl.innerHTML = `<i class='bx bx-error-circle'></i> Kamera açılamadı (izin reddedilmiş olabilir). Aşağıdaki kutuya QR değerini yazıp Enter'a basabilirsiniz.`;
+      statusEl.innerHTML = `<i class='bx bx-error-circle'></i> Kamera açılamadı (izin reddedilmiş olabilir). "QR'ı Başlat"a tekrar basıp izin verin ya da aşağıdaki kutuya QR değerini yazıp Enter'a basın.`;
     }
   }
 
@@ -733,7 +816,7 @@ const Depo = (() => {
       // Seçilen gün için çıkış kayıtlarını getir
       const kayitlar = await Api.select(
         "kargo_cikis_kayitlari",
-        `okutma_tarihi=gte.${dateStr}T00:00:00&okutma_tarihi=lt.${nextDateStr}T00:00:00&select=*,kargolar(*)&order=okutma_tarihi.desc`
+        `okutma_tarihi=gte.${dateStr}T00:00:00&okutma_tarihi=lt.${nextDateStr}T00:00:00&select=*,kargolar(alici_ad_soyad,durum)&order=okutma_tarihi.desc`
       );
 
       const historyHtml = kayitlar
@@ -802,7 +885,7 @@ const Depo = (() => {
     try {
       const data = await Api.select(
         "kargolar",
-        "select=*,kargo_urunleri(*),kargo_fotograflari(*),kullanicilar!ekleyen_kullanici_id(ad_soyad)&order=olusturma_tarihi.desc"
+        `select=${App.KARGO_LIST_SELECT},kullanicilar!ekleyen_kullanici_id(ad_soyad)&order=olusturma_tarihi.desc`
       );
       if (!App.isCurrent(token)) return;
       allKargolarDepo = data;

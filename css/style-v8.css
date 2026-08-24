@@ -53,22 +53,60 @@
   display: block;
 }
 
-.scanner-camera-frame {
+/* ---- Işıltılı dolum halkası (hold-to-confirm ilerlemesi) ----
+   pathLength="100" sayesinde JS tarafı gerçek çevre uzunluğunu bilmeden
+   stroke-dashoffset'i doğrudan 0-100 aralığında ayarlayabiliyor
+   (bkz. js/depo.js updateScanRing). Boşken (progress=0) halka görünmez,
+   2 saniyede saat yönünde dolup onaylanınca depo.js kamerayı durdurup
+   kutuyu tamamen gizliyor. */
+.scanner-ring {
   position: absolute;
-  inset: 14%;
-  border: 3px solid rgba(255, 255, 255, 0.85);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 0 0 999px rgba(10, 14, 39, 0.35);
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  transition: border-color 0.2s ease;
+}
+.scanner-ring__bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 2.5;
+}
+.scanner-ring__fg {
+  fill: none;
+  stroke: var(--scan-ring-color, #14e0c2);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  transition: stroke-dashoffset 0.12s linear;
+  animation: scanRingShimmer 1.6s ease-in-out infinite;
+}
+@keyframes scanRingShimmer {
+  0%, 100% { filter: drop-shadow(0 0 3px var(--scan-ring-color, #14e0c2)); }
+  50% { filter: drop-shadow(0 0 10px var(--scan-ring-color, #14e0c2)); }
 }
 
-/* exit-scanner.scanning + @keyframes scannerPulse zaten style-v5.css'te
-   tanımlı (v5'te hiç kullanılmıyordu); burada canlı tarama sırasında
-   çerçeveyi yeşile çeviriyoruz. */
-.exit-scanner.scanning .scanner-camera-frame {
-  border-color: var(--green);
+/* ---- Ortadaki "QR'ı Başlat" butonu — kamera boştayken/hata sonrası ---- */
+.scanner-start-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 22px;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  backdrop-filter: blur(2px);
 }
+.scanner-start-btn i { font-size: 26px; }
+.scanner-start-btn:hover { background: rgba(255, 255, 255, 0.18); }
 
 /* ---- Kargo etiketi küçük resmi (kart üzerinde) ----
    .kargo-card__barcode--interactive zaten var (stripe'ı kaldırıp
@@ -83,6 +121,25 @@
   border-radius: var(--radius-sm);
   cursor: zoom-in;
 }
+
+/* Liste sorgularında görsel çekilmediğinde görünen "isteğe bağlı yükle"
+   butonu (bkz. js/main.js viewKargoEtiket / viewKargoFotolar). */
+.kargo-card__view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  justify-content: center;
+  padding: 10px 12px;
+  border: 1.5px dashed var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.kargo-card__view-btn:hover { background: #E2E2FD; }
+.kargo-card__view-btn:disabled { opacity: 0.7; }
 
 /* ---- Kart altında "teslim eden" satırı ---- */
 

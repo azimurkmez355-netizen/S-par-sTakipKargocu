@@ -171,7 +171,24 @@ const QrScanner = (() => {
   let videoEl = null;
   let detecting = true;
   let onDetectCb = null;
+  let onProgressCb = null;
   let lastAttemptTs = 0;
+
+  // v8.5: tek karede iyi konumlanmış bir sonuç bulununca anında onaylamak,
+  // hızlı/eğik geçişlerde yanlış-pozitif riski taşıyordu. Bunun yerine
+  // AYNI kodun HOLD_DURATION_MS boyunca kesintisiz iyi-konumlu okunmasını
+  // istiyoruz; arayüz bu süreyi çerçeve etrafında dolan bir halka olarak
+  // gösteriyor (bkz. depo.js). Kod karede kaybolur/değişirse ilerleme
+  // sıfırlanıp baştan başlıyor.
+  const HOLD_DURATION_MS = 2000;
+  let holdValue = null;
+  let holdStartTs = 0;
+
+  function resetHold() {
+    if (holdValue !== null && onProgressCb) onProgressCb(0);
+    holdValue = null;
+    holdStartTs = 0;
+  }
 
   /** Kamerayı ve tarama döngüsünü durdurur. İdempotent — güvenle tekrar çağrılabilir. */
   function stopLive() {
@@ -184,6 +201,9 @@ const QrScanner = (() => {
     if (videoEl) videoEl.srcObject = null;
     videoEl = null;
     onDetectCb = null;
+    onProgressCb = null;
+    holdValue = null;
+    holdStartTs = 0;
   }
 
   function tick(now) {
@@ -209,9 +229,23 @@ const QrScanner = (() => {
 
       if (!liveReader) liveReader = buildReader(LIVE_FORMAT_NAMES, false);
       const result = decodeCanvasWith(liveReader, scanCanvas);
-      if (result && isWellPositioned(result.getResultPoints(), outSide)) {
-        detecting = false;
-        if (onDetectCb) onDetectCb(result.getText());
+      const wellPositioned = result && isWellPositioned(result.getResultPoints(), outSide);
+
+      if (wellPositioned) {
+        const text = result.getText();
+        if (text !== holdValue) {
+          holdValue = text;
+          holdStartTs = now;
+        }
+        const progress = Math.min(1, (now - holdStartTs) / HOLD_DURATION_MS);
+        if (onProgressCb) onProgressCb(progress);
+        if (progress >= 1) {
+          detecting = false;
+          holdValue = null;
+          if (onDetectCb) onDetectCb(text);
+        }
+      } else {
+        resetHold();
       }
     }
     rafId = requestAnimationFrame(tick);
@@ -219,18 +253,23 @@ const QrScanner = (() => {
 
   /**
    * Arka kamerayı açar ve video elementine bağlar, sürekli kod arar.
-   * Bir kod bulunca onDetect(text) BİR KEZ çağrılır ve tarama duraklar;
-   * çağıran taraf işini bitirince resumeLive() ile devam ettirmelidir
+   * Aynı kod HOLD_DURATION_MS boyunca kesintisiz iyi-konumlu okununca
+   * onDetect(text) BİR KEZ çağrılır ve tarama duraklar; onProgress(0-1)
+   * her karede ilerlemeyi bildirir (arayüzdeki halka animasyonu için).
+   * Çağıran taraf işini bitirince resumeLive() ile devam ettirmelidir
    * (aynı kodun "zaten teslim edildi" gibi bilinçli tekrar okutulabilmesi
    * için zaman bazlı debounce yerine bu yöntem tercih edildi).
    */
-  async function startLive(video, onDetect) {
+  async function startLive(video, onDetect, onProgress) {
     ensureLib();
     stopLive();
     videoEl = video;
     onDetectCb = onDetect;
+    onProgressCb = onProgress || null;
     detecting = true;
     lastAttemptTs = 0;
+    holdValue = null;
+    holdStartTs = 0;
 
     video.setAttribute("playsinline", "");
     video.setAttribute("muted", "");
@@ -256,6 +295,8 @@ const QrScanner = (() => {
   function resumeLive() {
     lastAttemptTs = 0;
     detecting = true;
+    holdValue = null;
+    holdStartTs = 0;
   }
 
   // Sekme arka plana alınınca kamerayı bırak (açık kalıp pil/gizlilik

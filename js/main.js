@@ -15,6 +15,17 @@ const App = (() => {
     PTTKargo: { icon: "bx-envelope", color: "#F5384F" }
   };
 
+  // v8.4: kargolar.etiket_foto_base64 artık her satırda dolu ve büyük
+  // (etiket fotoğrafı) — liste sorgularında select=* kullanmak, kargo
+  // sayısı arttıkça Neon Data API'nin 10MB yanıt sınırını aşıp "response
+  // is too large" hatasına yol açıyordu. Liste ekranları (Kargolarım,
+  // Tüm Kargolar, Genel Bakış) artık SADECE bu sütunları çekiyor; görsel
+  // alanları (etiket_foto_base64, kargo_fotograflari.foto_base64) hariç
+  // tutulup, kartlarda tıklanınca tek bir kargo için ayrıca (bindKargoCardEvents
+  // içindeki js-view-etiket / js-view-fotolar) yükleniyor.
+  const KARGO_LIST_SELECT =
+    "id,alici_ad_soyad,kargo_firmasi,durum,olusturma_tarihi,cikis_tarihi,qr_kod,teslim_eden_adi,ekleyen_kullanici_id,kargo_urunleri(*),kargo_fotograflari(id)";
+
   function boot() {
     const session = Auth.getSession();
     if (!session) {
@@ -310,10 +321,12 @@ const App = (() => {
             <span>${refNo(kargo.id)}</span>
             <span title="${UI.formatDateTime(kargo.olusturma_tarihi)}">${UI.timeAgo(kargo.olusturma_tarihi)}</span>
           </div>
-          <div class="kargo-card__barcode${kargo.etiket_foto_base64 ? " kargo-card__barcode--interactive" : ""}">
+          <div class="kargo-card__barcode${kargo.etiket_foto_base64 || kargo.qr_kod ? " kargo-card__barcode--interactive" : ""}">
             ${
               kargo.etiket_foto_base64
                 ? `<img src="${kargo.etiket_foto_base64}" class="js-lightbox-img" alt="Kargo etiketi (QR)" />`
+                : kargo.qr_kod
+                ? `<button type="button" class="kargo-card__view-btn js-view-etiket" data-kargo-id="${kargo.id}"><i class='bx bx-qr-scan'></i> Etiketi Gör</button>`
                 : ""
             }
           </div>
@@ -354,7 +367,7 @@ const App = (() => {
             </div>
 
             ${
-              fotolar.length
+              fotolar.length && fotolar[0].foto_base64
                 ? `<div class="kargo-card__fotolar">
                     ${fotolar
                       .map(
@@ -362,6 +375,8 @@ const App = (() => {
                       )
                       .join("")}
                   </div>`
+                : fotolar.length
+                ? `<button type="button" class="kargo-card__view-btn js-view-fotolar" data-kargo-id="${kargo.id}"><i class='bx bx-images'></i> ${fotolar.length} fotoğrafı gör</button>`
                 : ""
             }
           </div>
@@ -403,6 +418,52 @@ const App = (() => {
     container.querySelectorAll(".js-delete-btn").forEach((btn) =>
       btn.addEventListener("click", () => handlers.onDelete && handlers.onDelete(btn.dataset.id))
     );
+    container.querySelectorAll(".js-view-etiket").forEach((btn) =>
+      btn.addEventListener("click", () => viewKargoEtiket(btn))
+    );
+    container.querySelectorAll(".js-view-fotolar").forEach((btn) =>
+      btn.addEventListener("click", () => viewKargoFotolar(btn))
+    );
+  }
+
+  /* Liste sorguları artık görselleri getirmiyor (bkz. KARGO_LIST_SELECT) —
+     kart üzerindeki "Etiketi Gör" / "X fotoğrafı gör" butonlarına
+     tıklanınca SADECE o kargonun görsellerini isteğe bağlı çekiyoruz. */
+
+  async function viewKargoEtiket(btn) {
+    const id = btn.dataset.kargoId;
+    btn.disabled = true;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = `<i class='bx bx-loader-alt bx-spin'></i> Yükleniyor...`;
+    try {
+      const rows = await Api.select("kargolar", `id=eq.${id}&select=etiket_foto_base64`);
+      const src = rows && rows[0] && rows[0].etiket_foto_base64;
+      if (src) openLightbox(src);
+      else UI.toast("Etiket görseli bulunamadı.", "info");
+    } catch (err) {
+      UI.toast(err.message || "Görsel yüklenemedi.", "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+
+  async function viewKargoFotolar(btn) {
+    const id = btn.dataset.kargoId;
+    btn.disabled = true;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = `<i class='bx bx-loader-alt bx-spin'></i> Yükleniyor...`;
+    try {
+      const rows = await Api.select("kargolar", `id=eq.${id}&select=kargo_fotograflari(foto_base64)`);
+      const fotolar = (rows && rows[0] && rows[0].kargo_fotograflari) || [];
+      if (fotolar.length) openLightbox(fotolar[0].foto_base64);
+      else UI.toast("Fotoğraf bulunamadı.", "info");
+    } catch (err) {
+      UI.toast(err.message || "Görsel yüklenemedi.", "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
   }
 
   /* ---------------- Kargo filtre çubuğu (Tüm Kargolar — admin + depo ortak) ---------------- */
@@ -481,6 +542,7 @@ const App = (() => {
     filterKargolar,
     renderKargoFilterBar,
     bindKargoFilterBar,
+    KARGO_LIST_SELECT,
     toggleMobileSidebar,
     closeMobileSidebar
   };
