@@ -41,7 +41,11 @@ const Depo = (() => {
   }
 
   function render(key) {
-    if (key !== "cikis") QrScanner.stopLive();
+    // "yeni" (etiket taraması) ve "cikis" (çıkış taraması) ekranlarının
+    // her ikisi de kendi video elementi için QrScanner.startLive'ı yeniden
+    // çağırıp önceki akışı otomatik kapatıyor; diğer ekranlara geçişte
+    // kamerayı burada açıkça durdurmamız gerekiyor.
+    if (key !== "cikis" && key !== "yeni") QrScanner.stopLive();
     App.setActiveNav(key);
     if (key === "liste") renderListView();
     else if (key === "tumu") renderAllKargolarView();
@@ -146,15 +150,23 @@ const Depo = (() => {
 
         <div class="form-section">
           <label class="form-label"><i class='bx bx-qr-scan'></i> Kargo Etiketi (QR)</label>
-          <p class="form-hint">Kargonun üzerindeki kargo firması etiketinin fotoğrafını çekin; etiketteki QR kod otomatik okunacak. Bu QR, kargo çıkışında teslimatı eşleştirmek için kullanılır ve her kargoda zorunludur.</p>
+          <p class="form-hint">Kargonun üzerindeki etiketi kameraya gösterin — QR kod algılanınca otomatik onaylanır, tıklamaya gerek yok. Bu QR, kargo çıkışında teslimatı eşleştirmek için kullanılır ve her kargoda zorunludur.</p>
           <div class="etiket-uploader">
-            <label class="photo-add-btn" id="etiket-add-btn">
-              <i class='bx bx-camera'></i>
-              <span>Etiket Fotoğrafı Çek / Yükle</span>
-              <input type="file" id="etiket-input" accept="image/*" capture="environment" hidden />
-            </label>
+            <div class="scanner-camera-wrap" id="etiket-camera-wrap">
+              <video id="etiket-video" class="scanner-video" playsinline muted></video>
+              <div class="scanner-camera-frame"></div>
+            </div>
             <div id="etiket-status" class="scanner-status"></div>
             <div id="etiket-preview" class="etiket-preview"></div>
+            <div class="etiket-uploader__actions">
+              <button type="button" class="btn btn--ghost btn--sm" id="etiket-rescan-btn" hidden>
+                <i class='bx bx-refresh'></i> Yeniden Tara
+              </button>
+              <label class="btn btn--ghost btn--sm" id="etiket-fallback-label">
+                <i class='bx bx-upload'></i> Kamera açılmazsa dosyadan yükle
+                <input type="file" id="etiket-input" accept="image/*" capture="environment" hidden />
+              </label>
+            </div>
           </div>
         </div>
 
@@ -184,6 +196,7 @@ const Depo = (() => {
     document.getElementById("add-product-btn").addEventListener("click", addProductRow);
     document.getElementById("photo-input").addEventListener("change", onPhotoSelected);
     document.getElementById("etiket-input").addEventListener("change", onEtiketSelected);
+    document.getElementById("etiket-rescan-btn").addEventListener("click", () => startEtiketScan(token));
     document.querySelectorAll(".firma-card").forEach((btn) =>
       btn.addEventListener("click", () => {
         document.querySelectorAll(".firma-card").forEach((b) => b.classList.remove("firma-card--active"));
@@ -191,6 +204,8 @@ const Depo = (() => {
       })
     );
     document.getElementById("kargo-form").addEventListener("submit", onSubmitKargo);
+
+    startEtiketScan(token);
   }
 
   function renumberProductRows() {
@@ -273,11 +288,74 @@ const Depo = (() => {
     );
   }
 
+  /* ---------------- Kargo Etiketi (QR) — canlı kamera taraması ---------------- */
+  /* v8.3: "çek → onayla → başarısızsa tekrar dene" akışı yerine, barkod
+     okuyucu gibi kamerayı sürekli tarayıp QR'ı görür görmez otomatik
+     onaylayan akışa geçildi (Kargo Çıkışı ekranındaki QrScanner.startLive
+     ile aynı motor). Kamera açılmazsa dosyadan yükleme her zaman
+     görünür bir yedek olarak kalıyor (onEtiketSelected). */
+
+  function captureVideoFrameJPEG(video, maxDim) {
+    const vw = video.videoWidth || maxDim;
+    const vh = video.videoHeight || maxDim;
+    const scale = Math.min(1, maxDim / Math.max(vw, vh));
+    const w = Math.max(1, Math.round(vw * scale));
+    const h = Math.max(1, Math.round(vh * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext("2d").drawImage(video, 0, 0, w, h);
+    return canvas.toDataURL("image/jpeg", 0.75);
+  }
+
+  async function startEtiketScan(token) {
+    const statusEl = document.getElementById("etiket-status");
+    const video = document.getElementById("etiket-video");
+    if (!video || !statusEl) return;
+
+    statusEl.className = "scanner-status loading";
+    statusEl.innerHTML = `<i class='bx bx-loader-alt bx-spin'></i> Kamera açılıyor...`;
+
+    try {
+      await QrScanner.startLive(video, (text) => {
+        if (!App.isCurrent(token)) return;
+        onEtiketDetected(token, text, video);
+      });
+      if (!App.isCurrent(token)) {
+        QrScanner.stopLive();
+        return;
+      }
+      statusEl.className = "scanner-status";
+      statusEl.innerHTML = `<i class='bx bx-scan'></i> Kamera açık — etiketi çerçeveye gösterin, otomatik algılanacak.`;
+    } catch (err) {
+      statusEl.className = "scanner-status error";
+      statusEl.innerHTML = `<i class='bx bx-error-circle'></i> Kamera açılamadı (izin reddedilmiş olabilir). Aşağıdan dosya olarak yükleyebilirsiniz.`;
+    }
+  }
+
+  function onEtiketDetected(token, text, video) {
+    if (!App.isCurrent(token)) return;
+    const previewDataUrl = captureVideoFrameJPEG(video, 1200);
+    QrScanner.stopLive();
+    etiketState = { text, previewDataUrl };
+
+    const statusEl = document.getElementById("etiket-status");
+    const previewEl = document.getElementById("etiket-preview");
+    const rescanBtn = document.getElementById("etiket-rescan-btn");
+    if (statusEl) {
+      statusEl.className = "scanner-status success";
+      statusEl.innerHTML = `<i class='bx bx-check-circle'></i> QR başarıyla okundu.`;
+    }
+    if (previewEl) previewEl.innerHTML = `<img src="${previewDataUrl}" alt="Kargo etiketi" />`;
+    if (rescanBtn) rescanBtn.hidden = false;
+  }
+
   async function onEtiketSelected(e) {
     const file = (e.target.files || [])[0];
     e.target.value = "";
     if (!file) return;
 
+    QrScanner.stopLive();
     const statusEl = document.getElementById("etiket-status");
     const previewEl = document.getElementById("etiket-preview");
     if (!statusEl || !previewEl) return;
@@ -298,6 +376,8 @@ const Depo = (() => {
       statusEl.className = "scanner-status success";
       statusEl.innerHTML = `<i class='bx bx-check-circle'></i> QR başarıyla okundu.`;
       previewEl.innerHTML = `<img src="${previewDataUrl}" alt="Kargo etiketi" />`;
+      const rescanBtn = document.getElementById("etiket-rescan-btn");
+      if (rescanBtn) rescanBtn.hidden = false;
     } catch (err) {
       etiketState = { text: null, previewDataUrl: null };
       statusEl.className = "scanner-status error";

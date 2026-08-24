@@ -17,6 +17,7 @@
 /* ---- Kargo Etiketi (QR) yükleme — Yeni Kargo Ekle formu ---- */
 
 .etiket-uploader { display: flex; flex-direction: column; gap: 12px; }
+.etiket-uploader__actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
 .etiket-preview img {
   display: block;
