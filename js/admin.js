@@ -94,7 +94,7 @@ const Admin = (() => {
 
     try {
       const [kargolar, gorevliler] = await Promise.all([
-        Api.select("kargolar", "select=*,kargo_urunleri(*),kargo_fotograflari(*),kullanicilar(ad_soyad)&order=olusturma_tarihi.desc"),
+        Api.select("kargolar", "select=*,kargo_urunleri(*),kargo_fotograflari(*),kullanicilar!ekleyen_kullanici_id(ad_soyad)&order=olusturma_tarihi.desc"),
         Api.select("kullanicilar", "rol=eq.depo&select=id,ad_soyad,aktif")
       ]);
       if (!App.isCurrent(token)) return;
@@ -293,7 +293,7 @@ const Admin = (() => {
     try {
       const data = await Api.select(
         "kargolar",
-        "select=*,kargo_urunleri(*),kargo_fotograflari(*),kullanicilar(ad_soyad)&order=olusturma_tarihi.desc"
+        "select=*,kargo_urunleri(*),kargo_fotograflari(*),kullanicilar!ekleyen_kullanici_id(ad_soyad)&order=olusturma_tarihi.desc"
       );
       if (!App.isCurrent(token)) return;
       allKargolar = data;

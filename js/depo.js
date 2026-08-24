@@ -11,6 +11,9 @@ const Depo = (() => {
   let etiketState = { text: null, previewDataUrl: null }; // decode edilmiş kargo etiketi QR'ı
   let allKargolarDepo = [];
   let activeFiltersDepo = { durum: "hepsi", firma: "hepsi", q: "" };
+  let lastHandledQr = null; // Kargo Çıkışı: aynı QR kamerada dururken tekrar tekrar işlenmesin diye
+  let lastHandledAt = 0;
+  const QR_REPEAT_COOLDOWN_MS = 4000;
 
   const FIRMALAR = [
     { key: "HepsiJET", label: "HepsiJET", icon: "bx-package", color: "#8B5CF6" },
@@ -311,7 +314,16 @@ const Depo = (() => {
   async function startEtiketScan(token) {
     const statusEl = document.getElementById("etiket-status");
     const video = document.getElementById("etiket-video");
+    const cameraWrap = document.getElementById("etiket-camera-wrap");
+    const previewEl = document.getElementById("etiket-preview");
+    const rescanBtn = document.getElementById("etiket-rescan-btn");
     if (!video || !statusEl) return;
+
+    // Yeniden Tara ile tekrar başlatıldığında önceki önizleme/kamera durumu
+    // temizlensin — kamera kutusu geri gelsin, eski etiket görseli kalksın.
+    if (cameraWrap) cameraWrap.hidden = false;
+    if (previewEl) previewEl.innerHTML = "";
+    if (rescanBtn) rescanBtn.hidden = true;
 
     statusEl.className = "scanner-status loading";
     statusEl.innerHTML = `<i class='bx bx-loader-alt bx-spin'></i> Kamera açılıyor...`;
@@ -328,6 +340,7 @@ const Depo = (() => {
       statusEl.className = "scanner-status";
       statusEl.innerHTML = `<i class='bx bx-scan'></i> Kamera açık — etiketi çerçeveye gösterin, otomatik algılanacak.`;
     } catch (err) {
+      if (cameraWrap) cameraWrap.hidden = true;
       statusEl.className = "scanner-status error";
       statusEl.innerHTML = `<i class='bx bx-error-circle'></i> Kamera açılamadı (izin reddedilmiş olabilir). Aşağıdan dosya olarak yükleyebilirsiniz.`;
     }
@@ -342,6 +355,8 @@ const Depo = (() => {
     const statusEl = document.getElementById("etiket-status");
     const previewEl = document.getElementById("etiket-preview");
     const rescanBtn = document.getElementById("etiket-rescan-btn");
+    const cameraWrap = document.getElementById("etiket-camera-wrap");
+    if (cameraWrap) cameraWrap.hidden = true;
     if (statusEl) {
       statusEl.className = "scanner-status success";
       statusEl.innerHTML = `<i class='bx bx-check-circle'></i> QR başarıyla okundu.`;
@@ -358,7 +373,9 @@ const Depo = (() => {
     QrScanner.stopLive();
     const statusEl = document.getElementById("etiket-status");
     const previewEl = document.getElementById("etiket-preview");
+    const cameraWrap = document.getElementById("etiket-camera-wrap");
     if (!statusEl || !previewEl) return;
+    if (cameraWrap) cameraWrap.hidden = true;
 
     statusEl.className = "scanner-status loading";
     statusEl.innerHTML = `<i class='bx bx-loader-alt bx-spin'></i> Etiket okunuyor...`;
@@ -625,6 +642,18 @@ const Depo = (() => {
   async function handleQrScan(qrText, token) {
     const value = (qrText || "").trim();
     if (!value) return;
+
+    // Kamera aynı etikete dönük dururken saniyede birkaç kez aynı QR'ı
+    // algılayıp aynı sonucu tekrar tekrar toast'lamasın diye kısa bir
+    // soğuma süresi — sonuç zaten ekranda duruyor, tekrar göstermeye gerek yok.
+    const now = Date.now();
+    if (value === lastHandledQr && now - lastHandledAt < QR_REPEAT_COOLDOWN_MS) {
+      QrScanner.resumeLive();
+      return;
+    }
+    lastHandledQr = value;
+    lastHandledAt = now;
+
     const statusEl = document.getElementById("scanner-status");
 
     try {
@@ -773,7 +802,7 @@ const Depo = (() => {
     try {
       const data = await Api.select(
         "kargolar",
-        "select=*,kargo_urunleri(*),kargo_fotograflari(*),kullanicilar(ad_soyad)&order=olusturma_tarihi.desc"
+        "select=*,kargo_urunleri(*),kargo_fotograflari(*),kullanicilar!ekleyen_kullanici_id(ad_soyad)&order=olusturma_tarihi.desc"
       );
       if (!App.isCurrent(token)) return;
       allKargolarDepo = data;

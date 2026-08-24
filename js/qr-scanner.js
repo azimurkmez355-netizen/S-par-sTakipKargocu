@@ -70,15 +70,46 @@ const QrScanner = (() => {
   let fileReader = null;
   let liveReader = null;
 
-  /** Canvas'tan barkod okumayı dener; bulamazsa (herhangi bir sebeple) null döner. */
+  /** Canvas'tan barkod okumayı dener; bulamazsa (herhangi bir sebeple) null döner.
+   *  Konum kontrolü yapabilmek için tam Result nesnesini döndürür — text
+   *  isteyen çağıran taraf .getText() ile alır. */
   function decodeCanvasWith(reader, canvas) {
     const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
     const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
     try {
-      return reader.decode(binaryBitmap).getText();
+      return reader.decode(binaryBitmap);
     } catch {
       return null; // kod bulunamadı — normal/beklenen durum
     }
+  }
+
+  // Canlı taramada, etiket çerçevenin kenarına çok yakın/taşarken ya da
+  // uzaktan/çok küçük göründüğünde okunursa yandan-çekim gibi güvenilmez
+  // sonuçlar kabul edilmiş oluyordu. Bu yüzden bulunan kodun köşe
+  // noktalarının çerçeve içinde makul biçimde durduğunu doğruluyoruz.
+  const LIVE_EDGE_MARGIN_FRACTION = 0.04; // kenara bu kadar (>=%4) yakınsa reddet
+  const LIVE_MIN_SIZE_FRACTION = 0.15; // kare boyutunun bu kadarından (<%15) küçükse reddet
+
+  function isWellPositioned(points, canvasSize) {
+    if (!points || !points.length) return false;
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
+    for (const p of points) {
+      const x = p.getX();
+      const y = p.getY();
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    const margin = canvasSize * LIVE_EDGE_MARGIN_FRACTION;
+    if (minX < margin || minY < margin || maxX > canvasSize - margin || maxY > canvasSize - margin) {
+      return false; // etiket çerçevenin kenarına çok yakın / taşıyor olabilir
+    }
+    const size = Math.max(maxX - minX, maxY - minY);
+    return size >= canvasSize * LIVE_MIN_SIZE_FRACTION;
   }
 
   function fileToImage(file) {
@@ -123,7 +154,8 @@ const QrScanner = (() => {
     // çözünürlük termal yazıcı etiketlerinde JPEG/moiré gürültüsünü
     // artırıp okumayı zorlaştırabiliyor. Üst sınır koyuyoruz.
     const fullCanvas = drawToCanvas(img, FULL_DECODE_MAX_DIM);
-    const text = decodeCanvasWith(fileReader, fullCanvas);
+    const result = decodeCanvasWith(fileReader, fullCanvas);
+    const text = result ? result.getText() : null;
     if (!text) return { text: null, previewDataUrl: null };
 
     const previewCanvas = drawToCanvas(img, PREVIEW_MAX_DIM);
@@ -176,10 +208,10 @@ const QrScanner = (() => {
       scanCanvas.getContext("2d", { willReadFrequently: true }).drawImage(videoEl, sx, sy, side, side, 0, 0, outSide, outSide);
 
       if (!liveReader) liveReader = buildReader(LIVE_FORMAT_NAMES, false);
-      const text = decodeCanvasWith(liveReader, scanCanvas);
-      if (text) {
+      const result = decodeCanvasWith(liveReader, scanCanvas);
+      if (result && isWellPositioned(result.getResultPoints(), outSide)) {
         detecting = false;
-        if (onDetectCb) onDetectCb(text);
+        if (onDetectCb) onDetectCb(result.getText());
       }
     }
     rafId = requestAnimationFrame(tick);
