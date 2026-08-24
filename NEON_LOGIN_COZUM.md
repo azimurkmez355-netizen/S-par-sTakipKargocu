@@ -46,7 +46,7 @@ kullanın:
 
 1. Neon Console > sol üstteki **branch seçicide** doğru branch'te
    olduğunuzdan emin olun, sonra **"Data API"** > **"API"** tab
-2. "API URL" bölümünde URL'i kopyalayın (şu an: `https://ep-withered-star-aybr2qce.apirest.c-5.us-east-2.aws.neon.tech/neondb/rest/v1`)
+2. "API URL" bölümünde URL'i kopyalayın
 3. `js/config.js` açıp `DATA_API_URL` satırına yapıştırın — kopyaladığınız
    adresle **birebir aynı** olmalı
 
