@@ -154,7 +154,7 @@ const Depo = (() => {
 
         <div class="form-section">
           <label class="form-label"><i class='bx bx-qr-scan'></i> Kargo Etiketi (QR)</label>
-          <p class="form-hint">"QR'ı Başlat"a basıp etiketi kareye tam ortalayın; ışıltılı halka 2 saniyede dolunca otomatik onaylanır. Bu QR, kargo çıkışında teslimatı eşleştirmek için kullanılır ve her kargoda zorunludur.</p>
+          <p class="form-hint">"QR'ı Başlat"a basıp etiketi kareye ortalayın; ışıltılı halka dolunca otomatik onaylanır. Bu QR, kargo çıkışında teslimatı eşleştirmek için kullanılır ve her kargoda zorunludur.</p>
           <div class="etiket-uploader">
             ${scannerCameraWrapHtml("etiket")}
             <div id="etiket-status" class="scanner-status"></div>
@@ -423,7 +423,7 @@ const Depo = (() => {
         return;
       }
       statusEl.className = "scanner-status";
-      statusEl.innerHTML = `<i class='bx bx-scan'></i> Etiketi kareye ortalayıp 2 saniye sabit tutun — halka dolunca onaylanır.`;
+      statusEl.innerHTML = `<i class='bx bx-scan'></i> Etiketi kareye ortalayın — halka dolunca otomatik onaylanır.`;
     } catch (err) {
       showScannerIdle("etiket");
       statusEl.className = "scanner-status error";
@@ -709,7 +709,7 @@ const Depo = (() => {
         return;
       }
       statusEl.className = "scanner-status";
-      statusEl.innerHTML = `<i class='bx bx-scan'></i> Etiketi kareye ortalayıp 2 saniye sabit tutun — halka dolunca onaylanır.`;
+      statusEl.innerHTML = `<i class='bx bx-scan'></i> Etiketi kareye ortalayın — halka dolunca otomatik onaylanır.`;
     } catch (err) {
       showScannerIdle("scanner");
       statusEl.className = "scanner-status error";

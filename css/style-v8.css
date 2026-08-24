@@ -52,6 +52,7 @@
   object-fit: cover;
   display: block;
 }
+.scanner-video[hidden] { display: none; }
 
 /* ---- Işıltılı dolum halkası (hold-to-confirm ilerlemesi) ----
    pathLength="100" sayesinde JS tarafı gerçek çevre uzunluğunu bilmeden
@@ -107,6 +108,12 @@
 }
 .scanner-start-btn i { font-size: 26px; }
 .scanner-start-btn:hover { background: rgba(255, 255, 255, 0.18); }
+/* .scanner-start-btn'in kendi "display: flex" kuralı, tarayıcının
+   [hidden] { display: none } kuralını eziyordu (ikisi de yazar/UA
+   katmanında eşit özgüllükte, ama author kuralı UA'yı geçiyor) —
+   bu yüzden JS'ten .hidden=true verilse bile buton görünmeye devam
+   ediyordu. Burada açıkça geçersiz kılıyoruz. */
+.scanner-start-btn[hidden] { display: none; }
 
 /* ---- Kargo etiketi küçük resmi (kart üzerinde) ----
    .kargo-card__barcode--interactive zaten var (stripe'ı kaldırıp

@@ -180,9 +180,15 @@ const QrScanner = (() => {
   // istiyoruz; arayüz bu süreyi çerçeve etrafında dolan bir halka olarak
   // gösteriyor (bkz. depo.js). Kod karede kaybolur/değişirse ilerleme
   // sıfırlanıp baştan başlıyor.
-  const HOLD_DURATION_MS = 2000;
+  // v8.6: 2sn çok uzun/zor geldi — 0.5sn'ye indirildi. Ayrıca el titremesi
+  // ya da tek bir bulanık kare, HOLD_GRACE_MS içinde toparlanırsa ilerlemeyi
+  // SIFIRLAMIYOR (sadece o kareyi atlıyor) — aksi halde kısa pencerede tek
+  // kötü kare bile dolumu hep baştan başlatıp asla bitmesine yol açardı.
+  const HOLD_DURATION_MS = 500;
+  const HOLD_GRACE_MS = 400;
   let holdValue = null;
   let holdStartTs = 0;
+  let lastGoodTs = 0;
 
   function resetHold() {
     if (holdValue !== null && onProgressCb) onProgressCb(0);
@@ -237,6 +243,7 @@ const QrScanner = (() => {
           holdValue = text;
           holdStartTs = now;
         }
+        lastGoodTs = now;
         const progress = Math.min(1, (now - holdStartTs) / HOLD_DURATION_MS);
         if (onProgressCb) onProgressCb(progress);
         if (progress >= 1) {
@@ -244,7 +251,10 @@ const QrScanner = (() => {
           holdValue = null;
           if (onDetectCb) onDetectCb(text);
         }
-      } else {
+      } else if (holdValue !== null && now - lastGoodTs > HOLD_GRACE_MS) {
+        // El titremesi / tek bulanık kare gibi kısa kesintiler HOLD_GRACE_MS
+        // içinde toparlanırsa ilerlemeyi sıfırlamıyoruz — sadece bu kareyi
+        // atlayıp bir sonrakini deniyoruz (holdStartTs olduğu gibi kalır).
         resetHold();
       }
     }
@@ -270,6 +280,7 @@ const QrScanner = (() => {
     lastAttemptTs = 0;
     holdValue = null;
     holdStartTs = 0;
+    lastGoodTs = 0;
 
     video.setAttribute("playsinline", "");
     video.setAttribute("muted", "");
@@ -297,6 +308,7 @@ const QrScanner = (() => {
     detecting = true;
     holdValue = null;
     holdStartTs = 0;
+    lastGoodTs = 0;
   }
 
   // Sekme arka plana alınınca kamerayı bırak (açık kalıp pil/gizlilik
