@@ -1,0 +1,102 @@
+/* ============================================================
+   KargoTakip v8 — Kargo Etiketi QR Sistemi (yapısal ekler)
+   ------------------------------------------------------------
+   theme-v7.css SADECE renk/tema override'ı için ayrılmış; burada
+   eklenenler yapısal (kamera görüntüleme alanı, etiket yükleme
+   önizlemesi, kart üzerinde "teslim eden" satırı) olduğundan
+   style-v5.css'in izlediği desenle yeni bir dosyada tutuluyor.
+   ============================================================ */
+
+.form-hint {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: -4px;
+}
+
+/* ---- Kargo Etiketi (QR) yükleme — Yeni Kargo Ekle formu ---- */
+
+.etiket-uploader { display: flex; flex-direction: column; gap: 12px; }
+
+.etiket-preview img {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+/* .scanner-status.success / .error zaten style-v5.css'te tanımlı */
+.scanner-status.loading { background: var(--surface-alt); color: var(--text-muted); }
+.scanner-status.info { background: var(--primary-light); color: var(--primary-dark); }
+
+/* ---- Kargo Çıkışı — canlı kamera taraması ---- */
+
+.scanner-camera-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto 14px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--sidebar-bg, #0A0E27);
+}
+
+.scanner-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.scanner-camera-frame {
+  position: absolute;
+  inset: 14%;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 999px rgba(10, 14, 39, 0.35);
+  pointer-events: none;
+  transition: border-color 0.2s ease;
+}
+
+/* exit-scanner.scanning + @keyframes scannerPulse zaten style-v5.css'te
+   tanımlı (v5'te hiç kullanılmıyordu); burada canlı tarama sırasında
+   çerçeveyi yeşile çeviriyoruz. */
+.exit-scanner.scanning .scanner-camera-frame {
+  border-color: var(--green);
+}
+
+/* ---- Kargo etiketi küçük resmi (kart üzerinde) ----
+   .kargo-card__barcode--interactive zaten var (stripe'ı kaldırıp
+   auto-height veriyordu); burada içine img eklenince boyutunu
+   sabitliyoruz. */
+
+.kargo-card__barcode--interactive img {
+  display: block;
+  width: 100%;
+  max-height: 150px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  cursor: zoom-in;
+}
+
+/* ---- Kart altında "teslim eden" satırı ---- */
+
+.kargo-card__teslim-eden {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px 14px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  border-top: 1px dashed var(--border);
+}
+.kargo-card__teslim-eden i { color: var(--green); font-size: 15px; flex-shrink: 0; }
+.kargo-card__teslim-eden strong { color: var(--text); }
+
+@media (max-width: 640px) {
+  .scanner-camera-wrap { max-width: 100%; }
+}

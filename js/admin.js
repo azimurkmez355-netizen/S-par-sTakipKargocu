@@ -274,39 +274,15 @@ const Admin = (() => {
         </div>
       </div>
 
-      <div class="filter-bar card">
-        <div class="filter-search">
-          <i class='bx bx-search'></i>
-          <input id="filter-q" type="text" placeholder="Alıcı veya görevli adına göre ara..." />
-        </div>
-        <select id="filter-durum" class="input input--select">
-          <option value="hepsi">Tüm Durumlar</option>
-          <option value="Paketlendi">Paketlendi</option>
-          <option value="Teslim Edildi">Teslim Edildi</option>
-        </select>
-        <select id="filter-firma" class="input input--select">
-          <option value="hepsi">Tüm Firmalar</option>
-          <option value="HepsiJET">HepsiJET</option>
-          <option value="ArasKargo">Aras Kargo</option>
-          <option value="PTTKargo">PTT Kargo</option>
-        </select>
-      </div>
+      ${App.renderKargoFilterBar()}
 
       <div id="kargo-list" class="kargo-grid">${App.skeletonCards(4)}</div>
     `);
 
     document.getElementById("refresh-kargolar-btn").addEventListener("click", renderKargolarView);
     document.getElementById("mark-all-delivered-btn").addEventListener("click", markAllDelivered);
-    document.getElementById("filter-q").addEventListener("input", (e) => {
-      activeFilters.q = e.target.value.toLowerCase();
-      paintKargoList();
-    });
-    document.getElementById("filter-durum").addEventListener("change", (e) => {
-      activeFilters.durum = e.target.value;
-      paintKargoList();
-    });
-    document.getElementById("filter-firma").addEventListener("change", (e) => {
-      activeFilters.firma = e.target.value;
+    App.bindKargoFilterBar((patch) => {
+      Object.assign(activeFilters, patch);
       paintKargoList();
     });
 
@@ -330,7 +306,7 @@ const Admin = (() => {
   function paintKargoList() {
     const host = document.getElementById("kargo-list");
     if (!host) return;
-    const list = getFilteredKargolar();
+    const list = App.filterKargolar(allKargolar, activeFilters);
     if (!list.length) {
       host.innerHTML = App.emptyState("bx-search-alt", "Sonuç bulunamadı", "Filtrelere uyan kargo bulunamadı.");
       return;
@@ -341,10 +317,21 @@ const Admin = (() => {
 
   async function markDelivered(id) {
     try {
-      await Api.update("kargolar", `id=eq.${id}`, { durum: "Teslim Edildi" });
+      const nowIso = new Date().toISOString();
+      await Api.update("kargolar", `id=eq.${id}`, {
+        durum: "Teslim Edildi",
+        cikis_tarihi: nowIso,
+        teslim_eden_kullanici_id: currentUser.id,
+        teslim_eden_adi: currentUser.ad_soyad
+      });
       UI.toast("Kargo teslim edildi olarak işaretlendi.", "success");
       const k = allKargolar.find((x) => String(x.id) === String(id));
-      if (k) k.durum = "Teslim Edildi";
+      if (k) {
+        k.durum = "Teslim Edildi";
+        k.cikis_tarihi = nowIso;
+        k.teslim_eden_kullanici_id = currentUser.id;
+        k.teslim_eden_adi = currentUser.ad_soyad;
+      }
       if (document.getElementById("kargo-list")) paintKargoList();
       if (document.getElementById("son-kargolar")) renderOzetView();
     } catch (err) {
@@ -352,22 +339,8 @@ const Admin = (() => {
     }
   }
 
-  function getFilteredKargolar() {
-    let list = allKargolar;
-    if (activeFilters.durum !== "hepsi") list = list.filter((k) => k.durum === activeFilters.durum);
-    if (activeFilters.firma !== "hepsi") list = list.filter((k) => k.kargo_firmasi === activeFilters.firma);
-    if (activeFilters.q) {
-      list = list.filter(
-        (k) =>
-          k.alici_ad_soyad.toLowerCase().includes(activeFilters.q) ||
-          (k.kullanicilar?.ad_soyad || "").toLowerCase().includes(activeFilters.q)
-      );
-    }
-    return list;
-  }
-
   function markAllDelivered() {
-    const bekleyenler = getFilteredKargolar().filter((k) => k.durum !== "Teslim Edildi");
+    const bekleyenler = App.filterKargolar(allKargolar, activeFilters).filter((k) => k.durum !== "Teslim Edildi");
     if (!bekleyenler.length) {
       UI.toast("İşaretlenecek bekleyen kargo bulunamadı.", "info");
       return;
@@ -380,10 +353,21 @@ const Admin = (() => {
         if (btn) { btn.disabled = true; btn.classList.add("btn--loading"); }
         try {
           const ids = bekleyenler.map((k) => k.id).join(",");
-          await Api.update("kargolar", `id=in.(${ids})`, { durum: "Teslim Edildi" });
+          const nowIso = new Date().toISOString();
+          await Api.update("kargolar", `id=in.(${ids})`, {
+            durum: "Teslim Edildi",
+            cikis_tarihi: nowIso,
+            teslim_eden_kullanici_id: currentUser.id,
+            teslim_eden_adi: currentUser.ad_soyad
+          });
           const idSet = new Set(bekleyenler.map((k) => String(k.id)));
           allKargolar.forEach((k) => {
-            if (idSet.has(String(k.id))) k.durum = "Teslim Edildi";
+            if (idSet.has(String(k.id))) {
+              k.durum = "Teslim Edildi";
+              k.cikis_tarihi = nowIso;
+              k.teslim_eden_kullanici_id = currentUser.id;
+              k.teslim_eden_adi = currentUser.ad_soyad;
+            }
           });
           UI.toast(`${bekleyenler.length} kargo teslim edildi olarak işaretlendi.`, "success");
           paintKargoList();

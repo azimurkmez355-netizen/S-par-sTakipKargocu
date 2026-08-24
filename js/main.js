@@ -310,7 +310,13 @@ const App = (() => {
             <span>${refNo(kargo.id)}</span>
             <span title="${UI.formatDateTime(kargo.olusturma_tarihi)}">${UI.timeAgo(kargo.olusturma_tarihi)}</span>
           </div>
-          <div class="kargo-card__barcode"></div>
+          <div class="kargo-card__barcode${kargo.etiket_foto_base64 ? " kargo-card__barcode--interactive" : ""}">
+            ${
+              kargo.etiket_foto_base64
+                ? `<img src="${kargo.etiket_foto_base64}" class="js-lightbox-img" alt="Kargo etiketi (QR)" />`
+                : ""
+            }
+          </div>
 
           <div class="kargo-card__body">
             <div class="kargo-card__alici">
@@ -375,6 +381,14 @@ const App = (() => {
                 : ""
             }
           </div>
+          ${
+            kargo.durum === "Teslim Edildi" && kargo.teslim_eden_adi
+              ? `<div class="kargo-card__teslim-eden">
+                  <i class='bx bx-check-shield'></i>
+                  <span><strong>${UI.escapeHtml(kargo.teslim_eden_adi)}</strong> tarafından teslim edildi — ${UI.formatDateTime(kargo.cikis_tarihi)}</span>
+                </div>`
+              : ""
+          }
         </div>
       </div>`;
   }
@@ -389,13 +403,57 @@ const App = (() => {
     container.querySelectorAll(".js-delete-btn").forEach((btn) =>
       btn.addEventListener("click", () => handlers.onDelete && handlers.onDelete(btn.dataset.id))
     );
-    // v5: Her karta QR göster butonu ekle + tıklamayı dinle (yerel, internetsiz QR)
-    if (typeof QRCodeHandler !== "undefined") {
-      container.querySelectorAll(".kargo-card").forEach((card) => {
-        QRCodeHandler.embedKargoQR(card.dataset.kargoId);
-      });
-      QRCodeHandler.bindShowQrEvents(container);
+  }
+
+  /* ---------------- Kargo filtre çubuğu (Tüm Kargolar — admin + depo ortak) ---------------- */
+
+  function filterKargolar(list, filters = {}) {
+    let out = list;
+    if (filters.durum && filters.durum !== "hepsi") out = out.filter((k) => k.durum === filters.durum);
+    if (filters.firma && filters.firma !== "hepsi") out = out.filter((k) => k.kargo_firmasi === filters.firma);
+    if (filters.q) {
+      const q = filters.q;
+      out = out.filter(
+        (k) =>
+          k.alici_ad_soyad.toLowerCase().includes(q) ||
+          (k.kullanicilar?.ad_soyad || "").toLowerCase().includes(q)
+      );
     }
+    return out;
+  }
+
+  function renderKargoFilterBar() {
+    return `
+      <div class="filter-bar card">
+        <div class="filter-search">
+          <i class='bx bx-search'></i>
+          <input id="filter-q" type="text" placeholder="Alıcı veya görevli adına göre ara..." />
+        </div>
+        <select id="filter-durum" class="input input--select">
+          <option value="hepsi">Tüm Durumlar</option>
+          <option value="Paketlendi">Paketlendi</option>
+          <option value="Teslim Edildi">Teslim Edildi</option>
+        </select>
+        <select id="filter-firma" class="input input--select">
+          <option value="hepsi">Tüm Firmalar</option>
+          <option value="HepsiJET">HepsiJET</option>
+          <option value="ArasKargo">Aras Kargo</option>
+          <option value="PTTKargo">PTT Kargo</option>
+        </select>
+      </div>`;
+  }
+
+  /** Filtre çubuğu input/select event'lerini bağlar; her değişimde onChange({q|durum|firma}) çağrılır. */
+  function bindKargoFilterBar(onChange) {
+    document.getElementById("filter-q").addEventListener("input", (e) => {
+      onChange({ q: e.target.value.toLowerCase() });
+    });
+    document.getElementById("filter-durum").addEventListener("change", (e) => {
+      onChange({ durum: e.target.value });
+    });
+    document.getElementById("filter-firma").addEventListener("change", (e) => {
+      onChange({ firma: e.target.value });
+    });
   }
 
   function openLightbox(src) {
@@ -420,6 +478,9 @@ const App = (() => {
     kargoCard,
     lowPolyAvatar,
     bindKargoCardEvents,
+    filterKargolar,
+    renderKargoFilterBar,
+    bindKargoFilterBar,
     toggleMobileSidebar,
     closeMobileSidebar
   };

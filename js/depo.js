@@ -8,6 +8,9 @@ const Depo = (() => {
   let currentUser = null;
   let productRowCount = 0;
   let photoBuffer = []; // { name, dataUrl }
+  let etiketState = { text: null, previewDataUrl: null }; // decode edilmiş kargo etiketi QR'ı
+  let allKargolarDepo = [];
+  let activeFiltersDepo = { durum: "hepsi", firma: "hepsi", q: "" };
 
   const FIRMALAR = [
     { key: "HepsiJET", label: "HepsiJET", icon: "bx-package", color: "#8B5CF6" },
@@ -19,6 +22,7 @@ const Depo = (() => {
     return [
       { key: "yeni", label: "Yeni Kargo Ekle", icon: "bx-plus-circle" },
       { key: "liste", label: "Kargolarım", icon: "bx-package" },
+      { key: "tumu", label: "Tüm Kargolar", icon: "bx-list-ul" },
       { key: "cikis", label: "Kargo Çıkışı", icon: "bx-qr-scan" },
       { key: "mesajlar", label: "Mesajlar", icon: "bx-message-dots" }
     ];
@@ -37,8 +41,10 @@ const Depo = (() => {
   }
 
   function render(key) {
+    if (key !== "cikis") QrScanner.stopLive();
     App.setActiveNav(key);
     if (key === "liste") renderListView();
+    else if (key === "tumu") renderAllKargolarView();
     else if (key === "cikis") renderKargoExitView();
     else if (key === "mesajlar") Mesajlar.mount(currentUser, "depo");
     else renderFormView();
@@ -98,6 +104,7 @@ const Depo = (() => {
   function renderFormView() {
     productRowCount = 0;
     photoBuffer = [];
+    etiketState = { text: null, previewDataUrl: null };
     const html = `
       <div class="view-header">
         <div>
@@ -138,6 +145,20 @@ const Depo = (() => {
         </div>
 
         <div class="form-section">
+          <label class="form-label"><i class='bx bx-qr-scan'></i> Kargo Etiketi (QR)</label>
+          <p class="form-hint">Kargonun üzerindeki kargo firması etiketinin fotoğrafını çekin; etiketteki QR kod otomatik okunacak. Bu QR, kargo çıkışında teslimatı eşleştirmek için kullanılır ve her kargoda zorunludur.</p>
+          <div class="etiket-uploader">
+            <label class="photo-add-btn" id="etiket-add-btn">
+              <i class='bx bx-camera'></i>
+              <span>Etiket Fotoğrafı Çek / Yükle</span>
+              <input type="file" id="etiket-input" accept="image/*" capture="environment" hidden />
+            </label>
+            <div id="etiket-status" class="scanner-status"></div>
+            <div id="etiket-preview" class="etiket-preview"></div>
+          </div>
+        </div>
+
+        <div class="form-section">
           <label class="form-label"><i class='bx bx-camera'></i> Kargo Fotoğrafları</label>
           <div class="photo-uploader">
             <label class="photo-add-btn">
@@ -162,6 +183,7 @@ const Depo = (() => {
 
     document.getElementById("add-product-btn").addEventListener("click", addProductRow);
     document.getElementById("photo-input").addEventListener("change", onPhotoSelected);
+    document.getElementById("etiket-input").addEventListener("change", onEtiketSelected);
     document.querySelectorAll(".firma-card").forEach((btn) =>
       btn.addEventListener("click", () => {
         document.querySelectorAll(".firma-card").forEach((b) => b.classList.remove("firma-card--active"));
@@ -251,6 +273,38 @@ const Depo = (() => {
     );
   }
 
+  async function onEtiketSelected(e) {
+    const file = (e.target.files || [])[0];
+    e.target.value = "";
+    if (!file) return;
+
+    const statusEl = document.getElementById("etiket-status");
+    const previewEl = document.getElementById("etiket-preview");
+    if (!statusEl || !previewEl) return;
+
+    statusEl.className = "scanner-status loading";
+    statusEl.innerHTML = `<i class='bx bx-loader-alt bx-spin'></i> Etiket okunuyor...`;
+    previewEl.innerHTML = "";
+
+    try {
+      const { text, previewDataUrl } = await QrScanner.decodeFromImageFile(file);
+      if (!text) {
+        etiketState = { text: null, previewDataUrl: null };
+        statusEl.className = "scanner-status error";
+        statusEl.innerHTML = `<i class='bx bx-error-circle'></i> QR okunamadı. Etiketi net, tam ve iyi ışıkta çekip tekrar yükleyin.`;
+        return;
+      }
+      etiketState = { text, previewDataUrl };
+      statusEl.className = "scanner-status success";
+      statusEl.innerHTML = `<i class='bx bx-check-circle'></i> QR başarıyla okundu.`;
+      previewEl.innerHTML = `<img src="${previewDataUrl}" alt="Kargo etiketi" />`;
+    } catch (err) {
+      etiketState = { text: null, previewDataUrl: null };
+      statusEl.className = "scanner-status error";
+      statusEl.innerHTML = `<i class='bx bx-error-circle'></i> ${UI.escapeHtml(err.message || "Etiket okunamadı.")}`;
+    }
+  }
+
   async function onSubmitKargo(e) {
     e.preventDefault();
     const alici = document.getElementById("alici-adsoyad").value.trim();
@@ -275,6 +329,10 @@ const Depo = (() => {
       UI.toast("En az bir ürün adı ve SKU girmelisiniz.", "error");
       return;
     }
+    if (!etiketState.text) {
+      UI.toast("Kargo etiketinin QR kodu okutulmadan kargo kaydedilemez.", "error");
+      return;
+    }
 
     const btn = document.getElementById("save-kargo-btn");
     btn.disabled = true;
@@ -285,7 +343,9 @@ const Depo = (() => {
         alici_ad_soyad: alici,
         kargo_firmasi: firmaBtn.dataset.firma,
         durum: "Paketlendi",
-        ekleyen_kullanici_id: currentUser.id
+        ekleyen_kullanici_id: currentUser.id,
+        qr_kod: etiketState.text,
+        etiket_foto_base64: etiketState.previewDataUrl
       });
       const kargo = inserted[0];
 
@@ -304,7 +364,12 @@ const Depo = (() => {
       UI.toast("Kargo başarıyla kaydedildi.", "success");
       render("liste");
     } catch (err) {
-      UI.toast(err.message || "Kargo kaydedilemedi.", "error");
+      const msg = err.message || "";
+      if (msg.includes("duplicate key value")) {
+        UI.toast("Bu QR zaten başka bir kargoda kullanılıyor. Farklı bir etiket okutun.", "error");
+      } else {
+        UI.toast(msg || "Kargo kaydedilemedi.", "error");
+      }
     } finally {
       if (btn) {
         btn.disabled = false;
@@ -346,7 +411,6 @@ const Depo = (() => {
       App.paint(token, "kargo-list", data.map((k) => App.kargoCard(k, { showEkleyen: false })).join(""));
       const host = document.getElementById("kargo-list");
       if (App.isCurrent(token) && host) {
-        // QR butonları da bindKargoCardEvents içinde otomatik eklenir
         App.bindKargoCardEvents(host);
       }
     } catch (err) {
@@ -357,14 +421,6 @@ const Depo = (() => {
   /* ============ Kargo Çıkışı Sayfası (v5) ============ */
   /* Depo görevlisinin kargolara QR kodu okutarak teslimat 
      onayladığı özel sayfa. Tarih ve saate göre filtrelenebilir. */
-
-  let qrScannerActive = false;
-  let scannedQrCodes = []; // { kargo_id, urun_id, timestamp }
-
-  function generateQrCode(text) {
-    // Basit QR kod JSON değeri oluştur (gerçek QR kütüphanesi gerekliyse eklenecek)
-    return `qr:${btoa(text)}`;
-  }
 
   async function renderKargoExitView() {
     const token = App.setContent(`
@@ -377,18 +433,22 @@ const Depo = (() => {
 
       <div class="kargo-exit-container">
         <div class="kargo-exit-panel">
-          <div class="card exit-scanner">
+          <div class="card exit-scanner" id="exit-scanner-card">
             <h3><i class='bx bx-qr'></i> QR Kod Okut</h3>
+            <div class="scanner-camera-wrap">
+              <video id="scanner-video" class="scanner-video" playsinline muted></video>
+              <div class="scanner-camera-frame"></div>
+            </div>
             <div class="scanner-input-group">
-              <input 
-                type="text" 
-                id="qr-scanner-input" 
-                class="input input--lg" 
-                placeholder="QR kodunu buraya okutun..."
+              <input
+                type="text"
+                id="qr-scanner-input"
+                class="input input--lg"
+                placeholder="Kamera açılmazsa QR değerini buraya yazıp Enter'a basın..."
                 autocomplete="off"
               />
               <button type="button" id="start-scan-btn" class="btn btn--primary">
-                <i class='bx bx-camera'></i> Kameradan Oku
+                <i class='bx bx-camera'></i> Kamerayı Başlat
               </button>
             </div>
             <div id="scanner-status" class="scanner-status"></div>
@@ -434,12 +494,12 @@ const Depo = (() => {
       if (e.key === "Enter") {
         const code = e.target.value.trim();
         e.target.value = "";
-        handleQrScan(code, token);
+        if (code) handleQrScan(code, token);
       }
     });
 
     document.getElementById("start-scan-btn").addEventListener("click", () => {
-      openQrScanner(token);
+      startCameraScan(token);
     });
 
     document.getElementById("filter-by-date-btn").addEventListener("click", () => {
@@ -449,50 +509,108 @@ const Depo = (() => {
       }
     });
 
+    startCameraScan(token);
     loadExitHistory(token, new Date());
   }
 
-  async function handleQrScan(qrData, token) {
+  async function startCameraScan(token) {
+    const statusEl = document.getElementById("scanner-status");
+    const video = document.getElementById("scanner-video");
+    const card = document.getElementById("exit-scanner-card");
+    if (!video || !statusEl) return;
     try {
-      // QR verisi: "kargo:{kargoId}:urun:{urunId}" şeklinde olmalı
-      const match = qrData.match(/kargo:(\d+)/);
-      if (!match) {
-        UI.toast("Geçersiz QR kodu", "error");
+      await QrScanner.startLive(video, (text) => {
+        if (!App.isCurrent(token)) return;
+        handleQrScan(text, token);
+      });
+      if (!App.isCurrent(token)) {
+        QrScanner.stopLive();
         return;
       }
+      if (card) card.classList.add("scanning");
+      statusEl.className = "scanner-status";
+      statusEl.innerHTML = `<i class='bx bx-scan'></i> Kamera açık — QR kodu çerçeveye gösterin.`;
+    } catch (err) {
+      if (card) card.classList.remove("scanning");
+      statusEl.className = "scanner-status error";
+      statusEl.innerHTML = `<i class='bx bx-error-circle'></i> Kamera açılamadı (izin reddedilmiş olabilir). Aşağıdaki kutuya QR değerini yazıp Enter'a basabilirsiniz.`;
+    }
+  }
 
-      const kargoId = parseInt(match[1]);
-      const timestamp = new Date();
+  /**
+   * QR eşleştirme: kargo_kod alanına göre arar. Üç sonuç: eşleşme yok,
+   * eşleşme var ama zaten teslim edilmiş (uyarı, DB'ye yazmaz), ya da
+   * eşleşme var ve teslim edilir (race-safe update + günlük kaydı).
+   */
+  async function handleQrScan(qrText, token) {
+    const value = (qrText || "").trim();
+    if (!value) return;
+    const statusEl = document.getElementById("scanner-status");
 
-      // Kargoyı getir
+    try {
       const kargolar = await Api.select(
         "kargolar",
-        `id=eq.${kargoId}&select=*`
+        `qr_kod=eq.${encodeURIComponent(value)}&select=id,alici_ad_soyad,kargo_firmasi,durum,cikis_tarihi,teslim_eden_adi`
       );
 
       if (!kargolar.length) {
-        UI.toast("Kargo bulunamadı", "error");
+        UI.toast("Bu QR sistemde kayıtlı değil.", "error");
+        if (statusEl) {
+          statusEl.className = "scanner-status error";
+          statusEl.innerHTML = `<i class='bx bx-error-circle'></i> Bu QR sistemde kayıtlı değil.`;
+        }
         return;
       }
 
       const kargo = kargolar[0];
 
-      // Durum güncelle
-      await Api.update("kargolar", `id=eq.${kargoId}`, { durum: "Teslim Edildi", cikis_tarihi: timestamp.toISOString() });
+      if (kargo.durum === "Teslim Edildi") {
+        const detay = kargo.teslim_eden_adi
+          ? ` — ${kargo.teslim_eden_adi} tarafından ${UI.formatDateTime(kargo.cikis_tarihi)}`
+          : "";
+        UI.toast(`${kargo.alici_ad_soyad}: Bu kargo zaten teslim edildi${detay}`, "info");
+        if (statusEl) {
+          statusEl.className = "scanner-status info";
+          statusEl.innerHTML = `<i class='bx bx-info-circle'></i> Zaten teslim edildi${UI.escapeHtml(detay)}`;
+        }
+        return;
+      }
 
-      // Çıkış kaydı ekle
+      const timestamp = new Date().toISOString();
+      // durum=neq.Teslim Edildi: iki görevli aynı anda okutursa (yarış durumu)
+      // sadece biri güncellesin diye koşullu update.
+      const updated = await Api.update(
+        "kargolar",
+        `id=eq.${kargo.id}&durum=neq.${encodeURIComponent("Teslim Edildi")}`,
+        {
+          durum: "Teslim Edildi",
+          cikis_tarihi: timestamp,
+          teslim_eden_kullanici_id: currentUser.id,
+          teslim_eden_adi: currentUser.ad_soyad
+        }
+      );
+
+      if (!updated.length) {
+        UI.toast(`${kargo.alici_ad_soyad}: Bu kargo az önce başka biri tarafından teslim edildi.`, "info");
+        return;
+      }
+
       await Api.insert("kargo_cikis_kayitlari", {
-        kargo_id: kargoId,
+        kargo_id: kargo.id,
         kullanici_id: currentUser.id,
-        okutma_tarihi: timestamp.toISOString()
+        okutma_tarihi: timestamp
       });
 
-      scannedQrCodes.push({ kargo_id: kargoId, timestamp });
-
-      UI.toast(`${kargo.alici_ad_soyad} - Teslim Edildi olarak işaretlendi`, "success");
+      UI.toast(`${kargo.alici_ad_soyad} — Teslim Edildi olarak işaretlendi`, "success");
+      if (statusEl) {
+        statusEl.className = "scanner-status success";
+        statusEl.innerHTML = `<i class='bx bx-check-circle'></i> ${UI.escapeHtml(kargo.alici_ad_soyad)} teslim edildi.`;
+      }
       loadExitHistory(token, new Date());
     } catch (err) {
       UI.toast(err.message || "İşlem başarısız", "error");
+    } finally {
+      QrScanner.resumeLive();
     }
   }
 
@@ -545,13 +663,56 @@ const Depo = (() => {
     }
   }
 
-  function openQrScanner(token) {
-    // HTML5 kamera API ile QR tarama açılacak
-    // Basit bir fallback: bir prompt ile QR kodu manuel girebilir
-    const qrText = prompt("QR kodunu yapıştırın:");
-    if (qrText) {
-      handleQrScan(qrText, token);
+  /* ---------------- Tüm Kargolar (tüm depo görevlilerinin kargoları, salt okunur) ---------------- */
+
+  async function renderAllKargolarView() {
+    const token = App.setContent(`
+      <div class="view-header">
+        <div>
+          <h1>Tüm Kargolar</h1>
+          <p class="view-sub">Sistemdeki tüm depo görevlilerinin eklediği kargolar.</p>
+        </div>
+        <button class="btn btn--ghost" id="refresh-tumu-btn"><i class='bx bx-refresh'></i> Yenile</button>
+      </div>
+
+      ${App.renderKargoFilterBar()}
+
+      <div id="kargo-list-tumu" class="kargo-grid">${App.skeletonCards(4)}</div>
+    `);
+
+    document.getElementById("refresh-tumu-btn").addEventListener("click", renderAllKargolarView);
+    App.bindKargoFilterBar((patch) => {
+      Object.assign(activeFiltersDepo, patch);
+      paintAllKargolarList();
+    });
+
+    await loadAllKargolarForDepo(token);
+  }
+
+  async function loadAllKargolarForDepo(token) {
+    try {
+      const data = await Api.select(
+        "kargolar",
+        "select=*,kargo_urunleri(*),kargo_fotograflari(*),kullanicilar(ad_soyad)&order=olusturma_tarihi.desc"
+      );
+      if (!App.isCurrent(token)) return;
+      allKargolarDepo = data;
+      paintAllKargolarList();
+    } catch (err) {
+      if (App.isCurrent(token)) App.paint(token, "kargo-list-tumu", App.emptyState("bx-error", "Liste yüklenemedi", err.message));
     }
+  }
+
+  function paintAllKargolarList() {
+    const host = document.getElementById("kargo-list-tumu");
+    if (!host) return;
+    const list = App.filterKargolar(allKargolarDepo, activeFiltersDepo);
+    if (!list.length) {
+      host.innerHTML = App.emptyState("bx-search-alt", "Sonuç bulunamadı", "Filtrelere uyan kargo bulunamadı.");
+      return;
+    }
+    host.innerHTML = list.map((k) => App.kargoCard(k, { showEkleyen: true, showActions: false })).join("");
+    App.bindKargoCardEvents(host);
   }
 
   return { mount };
