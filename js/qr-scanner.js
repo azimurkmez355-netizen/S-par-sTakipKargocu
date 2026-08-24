@@ -12,7 +12,9 @@
    ============================================================ */
 
 const QrScanner = (() => {
-  const LIVE_MAX_DIM = 640;
+  const LIVE_MAX_DIM = 900;
+  const LIVE_MIN_INTERVAL_MS = 90; // attemptBoth daha pahalı — saniyede ~11 deneme yeterli
+  const FULL_DECODE_MAX_DIM = 1800; // gerçek telefon fotoğrafları (12-48MP) için üst sınır
   const PREVIEW_MAX_DIM = 1200;
 
   function ensureLib() {
@@ -64,7 +66,11 @@ const QrScanner = (() => {
   async function decodeFromImageFile(file) {
     ensureLib();
     const img = await fileToImage(file);
-    const fullCanvas = drawToCanvas(img, Math.max(img.naturalWidth, img.naturalHeight));
+    // Gerçek telefon fotoğrafları (12-48MP) hem yavaş hem de bazı
+    // tarayıcılarda canvas piksel sınırını aşabiliyor; ayrıca aşırı
+    // çözünürlük termal yazıcı QR'larında JPEG/moiré gürültüsünü
+    // artırıp okumayı zorlaştırabiliyor. Üst sınır koyuyoruz.
+    const fullCanvas = drawToCanvas(img, FULL_DECODE_MAX_DIM);
     const text = decodeCanvas(fullCanvas, "attemptBoth");
     if (!text) return { text: null, previewDataUrl: null };
 
@@ -82,6 +88,7 @@ const QrScanner = (() => {
   let videoEl = null;
   let detecting = true;
   let onDetectCb = null;
+  let lastAttemptTs = 0;
 
   /** Kamerayı ve tarama döngüsünü durdurur. İdempotent — güvenle tekrar çağrılabilir. */
   function stopLive() {
@@ -96,28 +103,41 @@ const QrScanner = (() => {
     onDetectCb = null;
   }
 
-  function tick() {
+  function tick(now) {
     if (!videoEl || !stream) return;
-    if (detecting && videoEl.readyState >= 2 /* HAVE_CURRENT_DATA */ && videoEl.videoWidth) {
-      const scale = Math.min(1, LIVE_MAX_DIM / Math.max(videoEl.videoWidth, videoEl.videoHeight));
-      const w = Math.max(1, Math.round(videoEl.videoWidth * scale));
-      const h = Math.max(1, Math.round(videoEl.videoHeight * scale));
+    const ready = videoEl.readyState >= 2 /* HAVE_CURRENT_DATA */ && videoEl.videoWidth;
+    if (detecting && ready && now - lastAttemptTs >= LIVE_MIN_INTERVAL_MS) {
+      lastAttemptTs = now;
+      const vw = videoEl.videoWidth;
+      const vh = videoEl.videoHeight;
+      // .scanner-video, object-fit:cover ile KARE bir kutuda gösteriliyor —
+      // yani kullanıcı ekranda sadece orta kareyi görüyor. Tüm (geniş) kareyi
+      // küçültüp taramak yerine, görünen kareyle AYNI orta-kare bölgeyi kırpıp
+      // tarıyoruz; aksi halde QR, kullanıcının gördüğünden çok daha küçük ve
+      // az pikselli bir alana sıkışıp (özellikle termal yazıcı QR'larında)
+      // okunamaz hale geliyordu.
+      const side = Math.min(vw, vh);
+      const sx = (vw - side) / 2;
+      const sy = (vh - side) / 2;
+      const outSide = Math.min(side, LIVE_MAX_DIM);
       if (!scanCanvas) {
         scanCanvas = document.createElement("canvas");
         scanCtx = scanCanvas.getContext("2d", { willReadFrequently: true });
       }
-      if (scanCanvas.width !== w) scanCanvas.width = w;
-      if (scanCanvas.height !== h) scanCanvas.height = h;
-      scanCtx.drawImage(videoEl, 0, 0, w, h);
+      if (scanCanvas.width !== outSide) scanCanvas.width = outSide;
+      if (scanCanvas.height !== outSide) scanCanvas.height = outSide;
+      scanCtx.drawImage(videoEl, sx, sy, side, side, 0, 0, outSide, outSide);
       try {
-        const imageData = scanCtx.getImageData(0, 0, w, h);
-        const result = jsQR(imageData.data, w, h, { inversionAttempts: "dontInvert" });
+        const imageData = scanCtx.getImageData(0, 0, outSide, outSide);
+        const result = jsQR(imageData.data, outSide, outSide, { inversionAttempts: "attemptBoth" });
         if (result && result.data) {
           detecting = false;
           if (onDetectCb) onDetectCb(result.data);
         }
-      } catch {
-        /* bu kare okunamadı, bir sonraki karede tekrar denenir */
+      } catch (err) {
+        // Sessizce yutmuyoruz — beklenmedik bir hata varsa (ör. tarayıcıya
+        // özgü bir canvas kısıtı) konsolda görünür olsun ki teşhis edilebilsin.
+        console.error("QrScanner canlı tarama hatası:", err);
       }
     }
     rafId = requestAnimationFrame(tick);
@@ -136,13 +156,21 @@ const QrScanner = (() => {
     videoEl = video;
     onDetectCb = onDetect;
     detecting = true;
+    lastAttemptTs = 0;
 
     video.setAttribute("playsinline", "");
     video.setAttribute("muted", "");
     video.muted = true;
 
+    // width/height "ideal" verilmezse birçok telefon tarayıcısı düşük
+    // varsayılan bir çözünürlük seçiyor (ör. 640x480) — bu da termal
+    // yazıcıyla basılan yoğun/noktalı QR modüllerini okumaya yetmiyor.
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } },
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920 },
+        height: { ideal: 1920 }
+      },
       audio: false
     });
     video.srcObject = stream;
@@ -152,6 +180,7 @@ const QrScanner = (() => {
 
   /** Bir onDetect tetiklenmesinden sonra taramaya kaldığı yerden devam eder. */
   function resumeLive() {
+    lastAttemptTs = 0;
     detecting = true;
   }
 
