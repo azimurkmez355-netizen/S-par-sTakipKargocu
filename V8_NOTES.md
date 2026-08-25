@@ -412,3 +412,34 @@ Değişen/silinen dosyalar (v8.10):
           fişi, qr-info-banner, ürün kartı/foto stilleri),
           NEON_TAM_KURULUM.sql (sku NULL edilebilir, kargo_urun_id
           eklendi — sıfırdan kurulumlar için)
+
+## v8.11 — Mobilde yatay kayma + sabit üst bar sağlamlaştırma
+
+Kullanıcı gerçek cihazında mobilde sayfanın scroll sırasında sağa-sola
+kaydığını ve üst barın "her zaman sabit" hissetmediğini bildirdi.
+`.topbar-mobile` zaten `position:fixed` idi ve statik testte (Chromium
+tabanlı yerel test ortamı, 375px mobil viewport) `document.documentElement.scrollWidth`
+hiçbir yerde `innerWidth`'i aşmıyordu — yani bu ortamda birebir
+yeniden üretilemedi. Buna rağmen, bilinen iki gerçek mobil web
+sorununa karşı savunmacı bir düzeltme eklendi (her ikisi de zararsız,
+geriye dönük uyumlu):
+- `html { overflow-x: hidden; }` eklendi (`body`'de zaten vardı;
+  `<html>` her zaman aynı korumaya sahip olsun diye tamamlayıcı).
+- `.main-content { overflow-x: hidden; }` (≤860px) — içerik alanı
+  ne olursa olsun (bkz. v8.10'daki aura parıltısı gibi normal akış
+  içindeki taşabilecek elemanlar) sayfa asla yana kaymasın diye ek
+  bir kesme sınırı. Aura'nın `inset` değeri de -12px'ten -8px'e
+  düşürüldü (daha az taşma riski, görsel olarak fark edilmiyor).
+- `.topbar-mobile { transform: translateZ(0); will-change: transform; }`
+  (≤860px) — iOS Safari'de kompozit katmanı olmayan `position:fixed`
+  elemanların scroll sırasında hafifçe gecikip "tam sabit değilmiş"
+  hissi vermesi bilinen bir sorundur; bu, elemanı kendi GPU katmanına
+  alarak önlüyor.
+
+Kullanıcının kendi cihazında tekrar test etmesi gerekiyor — bu ortamda
+birebir doğrulanamadı.
+
+---
+Değişen dosyalar (v8.11): css/style.css (`html` için `overflow-x:hidden`),
+css/style-v8.css (`.main-content`/`.topbar-mobile` mobil sağlamlaştırma,
+aura inset küçültme).

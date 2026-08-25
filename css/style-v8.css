@@ -46,10 +46,10 @@
 .scanner-camera-wrap::before {
   content: "";
   position: absolute;
-  inset: -12px;
-  border-radius: calc(var(--radius-md) + 8px);
+  inset: -8px;
+  border-radius: calc(var(--radius-md) + 6px);
   background: conic-gradient(from 0deg, var(--primary), var(--accent), var(--pink, #c026d3), var(--cyan, #00b8d9), var(--primary));
-  filter: blur(20px);
+  filter: blur(16px);
   opacity: 0.55;
   z-index: -1;
   animation: scanAuraSpin 7s linear infinite;
@@ -261,4 +261,15 @@
 
 @media (max-width: 640px) {
   .scanner-camera-wrap { max-width: 100%; }
+}
+
+/* ---- Mobil: yatay kayma/titreme düzeltmesi (v8.11) ----
+   .main-content içeriğe göre genişleyebilecek her şeyi (aura parıltısı
+   dahil) yatayda kesiyor; sayfa hiçbir zaman yana kaymamalı. .topbar-mobile
+   zaten position:fixed'ti ama iOS Safari'de kompozit katmanı olmayan
+   fixed elemanlar scroll sırasında hafifçe gecikip "sabit değilmiş" hissi
+   verebiliyor — kendi katmanına alıp bunu engelliyoruz. */
+@media (max-width: 860px) {
+  .main-content { overflow-x: hidden; }
+  .topbar-mobile { transform: translateZ(0); will-change: transform; }
 }
