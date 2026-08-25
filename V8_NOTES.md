@@ -281,3 +281,59 @@ doğrulama hâlâ onlarda; sonucu tekrar bildirmeleri istendi.
 ---
 Değişen dosyalar (v8.8): js/invoice-ocr.js (satır bazlı alıcı adı,
 Y-toleranslı sütun tespiti, Adet-çapalı miktar ayrıştırma, PSM 6).
+
+## v8.9 — Mesajlaşmada "eski oturum" hatası + sesli alarm güvenilirliği
+
+Kullanıcı canlı ortamda (Railway) admin panelinden "Yeni Mesaj Talebi"
+gönderirken şu hatayı aldı: `API hatası (409): insert or update on
+table "mesaj_talepleri" violates foreign key constraint
+"mesaj_talepleri_olusturan_admin_id_fk..."`. Canlı veritabanı curl ile
+kontrol edildi — `kullanicilar` tablosunda `admin` (id=1) sorunsuz
+duruyordu; yani sorun veritabanında değil, **tarayıcıda önbelleğe
+alınmış eski bir oturumdaydı** (`localStorage`'daki `kargotakip_oturum`
+— muhtemelen bu oturumun DB tamamen sıfırlanmadan/bir kullanıcı
+silinmeden önce açılıp hiç yeniden giriş yapılmadığı bir sekmeden
+kalmış, artık geçersiz bir `id` taşıyordu). Uygulama girişte oturumu
+bir kere veritabanından çekip `localStorage`'a yazıyor, sonraki her
+açılışta DB'ye karşı yeniden doğrulamıyor — bu yüzden DB sıfırlanınca
+açık kalan sekmeler sessizce geçersizleşiyor.
+
+**İki değişiklik yapıldı:**
+
+1. `js/api.js` — merkezi `request()` fonksiyonu artık bu spesifik
+   hata örüntüsünü (409 + PostgREST'in `details` alanında `"is not
+   present in table \"kullanicilar\""`) tanıyor ve ham/kriptik
+   PostgREST mesajı yerine "Oturum bilgin güncel değil görünüyor...
+   Lütfen çıkış yapıp tekrar giriş yap." gibi görevlinin kendi başına
+   çözebileceği net bir hata gösteriyor. Bu, `currentUser.id`
+   kullanan HER insert/update için geçerli (kargo ekleme, mesaj
+   gönderme, okundu işaretleme, talep açma — hepsi aynı kalıba
+   giriyor), tek bir yerden düzeltildiği için hepsini kapsıyor.
+   Sentetik olarak (oturumu elle var olmayan bir id'ye çevirip) test
+   edildi, doğru mesaj göründü.
+2. `js/mesajlar.js` — acil mesaj sesli alarmının (`playSoundTwice`)
+   güvenilirliği artırıldı. Tarayıcıların otomatik oynatma politikası,
+   sayfa hiç fare/dokunma/tuş etkileşimi almadan JS'ten tetiklenen
+   `audio.play()` çağrılarını sessizce reddedebiliyor — depo ekranı
+   saatlerce dokunulmadan açık kalıp ilk acil mesaj tam o sırada
+   gelirse, sesin hiç çalmama riski vardı (görsel banner/üst-uyarı
+   yine de görünüyordu, ama görevli ekrana bakmıyorsa fark etmeyebilir).
+   Artık sayfadaki İLK tıklama/dokunma/tuş basımında ses kısık
+   seviyede bir kez "hazırlanıp" (çal + hemen duraklat) tarayıcının bu
+   origin için otomatik oynatmaya izin vermesi sağlanıyor — gerçek
+   alarm o andan sonra güvenilir çalabiliyor. (Bu "unlock" adımının
+   kendisi de bir kullanıcı jesti gerektirdiğinden, sekme hiç
+   dokunulmadan İLK acil mesaj gelirse yine de risk var — ama bu artık
+   tarayıcıların temel autoplay kısıtı, KargoTakip'e özgü bir hata
+   değil.)
+
+**Kullanıcı için hemen yapılması gereken**: mevcut açık sekme(ler)de
+çıkış yapıp tekrar giriş yapmalı — kod düzeltmesi yeni oturumların bu
+duruma düşmesini daha anlaşılır hale getiriyor, ama zaten açık olan
+eski/geçersiz oturumu otomatik onarmıyor (localStorage'ı elden
+temizlemek DB durumunu bilmeden riskli olurdu).
+
+---
+Değişen dosyalar (v8.9): js/api.js (409 + kullanicilar FK hatası için
+özel, anlaşılır mesaj), js/mesajlar.js (sesli alarm için autoplay
+"unlock" — ilk kullanıcı etkileşiminde sesi bir kez hazırlama).

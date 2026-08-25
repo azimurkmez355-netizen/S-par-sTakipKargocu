@@ -28,6 +28,7 @@ const Mesajlar = (() => {
   let alarmIntervalId = null;
 
   let lastSeenMaxMsgId = 0;
+  let audioUnlockAttached = false;
 
   /* ---------------- Host elemanları (görünüm değişse de kalıcı) ---------------- */
 
@@ -51,6 +52,42 @@ const Mesajlar = (() => {
       host.className = "top-alert-host";
       document.body.appendChild(host);
     }
+    unlockAudioOnFirstInteraction();
+  }
+
+  /**
+   * Tarayıcıların otomatik oynatma (autoplay) politikası, sayfa hiç
+   * etkileşim almadan JS'ten tetiklenen `.play()` çağrılarını sessizce
+   * reddedebiliyor — depo görevlisinin ekranı saatlerce dokunulmadan
+   * açık kaldığı, ilk acil mesajın tam da o sırada geldiği bir senaryoda
+   * sesli alarmın hiç çalmaması riski var (görsel banner/üst-uyarı yine
+   * de görünür, ama görevli o an ekrana bakmıyorsa fark etmeyebilir).
+   * Bu yüzden sayfadaki İLK tıklama/dokunma/tuş basımında sesi kısık
+   * seviyede bir kez "hazırlayıp" (çal + hemen duraklat) tarayıcının
+   * bu origin için otomatik oynatmaya izin vermesini sağlıyoruz —
+   * gerçek alarm o andan sonra güvenilir şekilde çalabiliyor.
+   */
+  function unlockAudioOnFirstInteraction() {
+    if (audioUnlockAttached) return;
+    audioUnlockAttached = true;
+    const events = ["click", "touchstart", "keydown"];
+    const unlock = () => {
+      events.forEach((ev) => document.removeEventListener(ev, unlock));
+      const audio = document.getElementById("acil-audio");
+      if (!audio) return;
+      audio.muted = true;
+      audio
+        .play()
+        .then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+          audio.muted = false;
+        })
+        .catch(() => {
+          audio.muted = false;
+        });
+    };
+    events.forEach((ev) => document.addEventListener(ev, unlock, { passive: true }));
   }
 
   function navItem() {

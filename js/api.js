@@ -50,13 +50,30 @@ const Api = (() => {
     }
 
     if (!res.ok) {
-      let detail = "";
+      let errJson = null;
       try {
-        const errJson = await res.json();
-        detail = errJson.message || errJson.hint || JSON.stringify(errJson);
+        errJson = await res.json();
       } catch (e) {
-        detail = res.statusText;
+        /* JSON olmayan gövde — aşağıda statusText'e düşülecek */
       }
+      const message = (errJson && errJson.message) || "";
+      const details = (errJson && errJson.details) || "";
+
+      // Bir INSERT/UPDATE, oturumdaki kullanıcının artık veritabanında
+      // olmayan bir id'sini (ör. currentUser.id) bir FK kolonuna yazmaya
+      // çalıştığında Postgres bu şekilde reddediyor — canlı veritabanı
+      // NEON_TAM_KURULUM.sql ile tamamen sıfırlanıp yeniden kurulduğunda
+      // (ya da kullanıcı silindiğinde) tarayıcıda önbelleğe alınmış eski
+      // bir oturumla gerçekleşebilir. Ham/kriptik PostgREST hatası yerine
+      // görevlinin kendi başına çözebileceği net bir mesaj gösteriyoruz.
+      if (res.status === 409 && /is not present in table "kullanicilar"/i.test(details)) {
+        throw new Error(
+          "Oturum bilgin güncel değil görünüyor (kullanıcı hesabın veritabanında bulunamadı). Lütfen çıkış yapıp tekrar giriş yap."
+        );
+      }
+
+      const hint = (errJson && errJson.hint) || "";
+      const detail = message || hint || details || (errJson ? JSON.stringify(errJson) : res.statusText);
       throw new Error(`API hatası (${res.status}): ${detail}`);
     }
 
