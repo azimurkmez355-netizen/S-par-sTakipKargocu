@@ -229,3 +229,55 @@ Değişen/eklenen dosyalar (v8.7):
           için)
 DOKUNULMADI: js/qr-scanner.js ve tüm QR/barkod akışı — OCR tamamen
           ayrı, isteğe bağlı bir yol; QR zorunluluğu değişmedi.
+
+## v8.8 düzeltmesi — fatura OCR gerçek faturalarda hiç veri çekmiyordu
+
+Kullanıcı gerçek faturalarını (üzerinde tam olarak neyin alınması
+gerektiğini kırmızıyla işaretleyerek) paylaştı: "hiçbir şey çekmiyor"
+ve alıcı adının **2 kelimeyle sınırlı olmaması** gerektiği bildirildi
+— "SAYIN" altında bazen tek satırlık bir kişi adı ("FATIH ULUTAŞ"),
+bazen 2 satıra yayılan bir şirket unvanı ("ÜSTÜKAR KAYA CELAL TİCARET"
++ "İŞ GÜV.TEK.HIRD.") oluyor; sabit "ilk 2 kelime" kuralı ikinci
+durumda unvanı yarıda kesiyordu.
+
+Üç değişiklik yapıldı (`js/invoice-ocr.js`):
+
+1. **Alıcı adı artık satır bazlı**: "SAYIN" satırından, bir "adres
+   satırı" görünene kadarki TÜM satırlar isme dahil ediliyor (sabit
+   kelime sayısı yerine). Adres satırı, içinde MAH/SOK/CAD/BULV/NO:/
+   E-Posta/Vergi/TCKN/Tel gibi işaretlerden biri geçen ilk satır
+   olarak tanımlanıyor — kaçak/sonsuz büyümeyi önlemek için en fazla
+   4 satır alınıyor.
+2. **Sütun sınırı tespiti artık satır gruplamasından bağımsız**:
+   eskiden "Kodu" ve "Miktar" kelimelerinin Tesseract'ın AYNI "line"
+   nesnesinde olması gerekiyordu — gerçek, yoğun/çizgili fatura
+   tablolarında Tesseract'ın satır bölümlemesi bunu her zaman
+   sağlamıyor (muhtemelen "hiç veri çekmeme" şikayetinin asıl kaynağı
+   buydu). Artık düz `words` dizisi üzerinde, "aynı satır" yerine
+   "benzer Y-konumu" (kodu kelimesinin kendi yüksekliğine göre
+   toleranslı) şartıyla eşleştiriliyor.
+3. **Miktar artık "Adet" kelimesine sabitlenerek** okunuyor (gerçek
+   faturalarda hep "5 Adet" gibi yazılıyor) — eskiden miktar
+   kovasındaki ilk rakam dizisi alınıyordu, bu da sağdaki Birim
+   Fiyat/İskonto/KDV sütunlarından rakam sızma riski taşıyordu.
+   "Adet" hiç bulunamazsa eski (daha az güvenilir) yönteme düşülüyor.
+
+Ayrıca Tesseract'a sayfa bölümleme modu (PSM) **6** ("tek düzgün metin
+bloğu varsay") açıkça set edildi (`worker.setParameters`) — varsayılan
+otomatik mod (PSM 3) yoğun/çok sütunlu tabloları paragraf/sütun sanıp
+okuma sırasını karıştırabiliyor; fiş/fatura tarzı düzenler için PSM 6
+standart öneridir.
+
+**Doğrulama notu**: Kullanıcının gerçek fatura fotoğrafları bu ortamda
+dosya olarak erişilemediğinden (sadece sohbette görsel olarak
+görülebiliyor), düzeltmeler kullanıcının paylaştığı görsellerin
+**birebir metin/sütun yapısını** (hizalı iki fatura düzeni, çok
+satırlı unvan + tek satırlı isim, "N Adet" + sağda fiyat sütunları)
+taklit eden hizalı sentetik test görselleriyle gerçek uygulama
+üzerinden doğrulandı — her iki isim biçimi ve miktar/kod/ad ayrıştırma
+birebir doğru çıktı. Kullanıcının kendi fotoğraflarıyla nihai
+doğrulama hâlâ onlarda; sonucu tekrar bildirmeleri istendi.
+
+---
+Değişen dosyalar (v8.8): js/invoice-ocr.js (satır bazlı alıcı adı,
+Y-toleranslı sütun tespiti, Adet-çapalı miktar ayrıştırma, PSM 6).
