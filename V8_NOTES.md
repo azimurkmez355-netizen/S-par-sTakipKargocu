@@ -816,3 +816,77 @@ Değişen dosyalar (v8.16):
           js/admin.js (Tüm Kargolar artık kargoRow kullanıyor),
           css/style-v8.css (.kargo-rows/.kargo-row*, .etiket-secim-*,
           .modal-box--kargo-detail)
+
+---
+
+## v8.19 — Tüm Kargolar tablosu sıfırdan: gerçek kök neden `display:flex` bir `<td>`'ye uygulanmıştı
+
+Kullanıcı v8.18'in canlıdaki halini "hâlâ kötü" bulup baştan sıfırdan
+istedi: net sütun sınırları, daha iyi logolar, daha modern "teslim
+edildi" boyaması, ve somut bir iddia — "Teslim Tarihi bariz görünmüyor".
+
+**Asıl kök neden bulundu**: `.kargo-table__alici`, `.kargo-table__urun-adi`,
+`.kargo-table__kargocu` ve `.kargo-table__actions` kuralları
+`display:flex`'i DOĞRUDAN `<td>` elemanının kendisine uyguluyordu (ikon+
+metni yan yana dizmek için). Bu, tarayıcıların `<td>`'yi tablonun hücre/
+sütun düzeninden tamamen çıkarmasına yol açan bilinen bir CSS tuzağı —
+`vertical-align` işlevsiz kalıyor ve (bu durumda canlı veriyle ÖLÇÜLEREK
+doğrulandığı gibi) komşu sütunlar üst üste binebiliyor. Gerçek 6 kargoluk
+canlı tabloda `getBoundingClientRect()` ile ölçüldüğünde "Alıcı Adı" ve
+"Ürün Adı" hücrelerinin TAM OLARAK AYNI x-konumunda render olduğu
+görüldü — kullanıcının "ürün adı alıcı adının altına yapışmış gibi"
+şikayetinin birebir teknik karşılığı buydu. Düzeltme: flex artık `<td>`'nin
+kendisinde değil, içindeki yeni `.kargo-table__cell-flex`/
+`.kargo-table__actions-inner` sarmalayıcı `<span>`'lerde — `<td>` her
+zaman gerçek `table-cell` olarak kalıyor. Düzeltme sonrası aynı ölçüm
+yöntemiyle tüm sütunların ardışık, çakışmasız ve doğru genişlikte
+olduğu doğrulandı (hem depo'nun salt-okunur görünümünde hem admin'in
+"Seç" + aksiyon butonlu görünümünde).
+
+**"Teslim Tarihi görünmüyor" iddiası araştırıldı**: Kod ve canlı veri
+incelendiğinde sütun/veri her zaman doğruydu (`kargo.cikis_tarihi`
+doluysa biçimlendirilmiş tarih, boşsa "—") — gerçek neden büyük
+ihtimalle yukarıdaki `display:flex` hatasının sütunları görsel olarak
+belirsizleştirmesiydi. Ayrıca ek önlem olarak: sütun min-genişlikleri
+biraz sıkılaştırıldı ve `.kargo-table-wrap`'e her zaman görünen (hover
+beklemeyen) ince bir scrollbar eklendi — dar ekranlarda sağdaki
+sütunlara kaydırma gerektiği artık daha belirgin.
+
+**`white-space` özgüllük hatası da bulundu/düzeltildi**: `.kargo-table__alici`
+üzerindeki `white-space:normal` (uzun isimlerin satır kırması için),
+daha yüksek özgüllüğe sahip genel `.kargo-table tbody td { white-space:
+nowrap }` kuralı tarafından eziliyordu (element+class > tek class).
+`.kargo-table td.kargo-table__alici` şeklinde özgüllüğü artırılarak
+düzeltildi.
+
+**Görsel cila**: `.firma-chip` 42×28'den 42×42'ye (kare) çıkarıldı —
+kaynak logo PNG'leri 600×600 kare olduğu için artık en-boy oranı
+uyumlu, küçük/bozuk görünmüyor; hafif gölge eklendi. Teslim edilen
+satır/kart artık düz doygun yeşil yerine düşük opasiteli katman
+(`rgba(34,197,94,0.07)`) — daha "premium dashboard", daha az "boyanmış
+Excel hücresi" hissi. Bu ikinci değişiklik hem masaüstü tablosuna hem
+mobil karta tutarlı uygulandı.
+
+**Doğrulama**: Bu tur, Browser panesi kullanıcı tarafında görüntülenmediği
+için (`preview` sekmesi "not displayed, not compositing") **piksel
+ekran görüntüsü alınamadı** — doğrulama tamamen `getComputedStyle` +
+`getBoundingClientRect` + gerçek canlı veri (9 kargo, admin ve depo
+salt-görüntüleme oturumlarıyla) üzerinden programatik olarak yapıldı:
+sütun genişlik/konum tutarlılığı (3 farklı satır karşılaştırılarak),
+`display:table-cell`/`vertical-align:middle`'ın gerçekten uygulandığı,
+"Seç" modu + aksiyon sütununun bozulmadığı, satır açma/kapama, ve
+mobil kart fallback'inin (375px) doğru render olduğu doğrulandı. Kullanıcının
+canlıda GÖRSEL olarak da onaylaması gerekiyor — bu tur ekran görüntüsü
+karşılaştırması yapılamadı.
+
+---
+Değişen dosyalar (v8.19):
+  DÜZEN : css/style-v8.css (.kargo-table__cell-flex yeni sarmalayıcı —
+          display:flex artık <td>'lerin kendisinde değil; .kargo-table__
+          actions-inner aynı nedenle eklendi; white-space özgüllük
+          düzeltmesi; .firma-chip 42×42 kare; .kargo-table__row--delivered
+          ve .kargo-mcard--delivered düşük-opasiteli yeşile geçti;
+          .kargo-table-wrap'e kalıcı ince scrollbar; sütun min-genişlikleri
+          sıkılaştırıldı), js/main.js (kargoTableRowPairHtml — alıcı/
+          ürün/kargocu/aksiyon hücreleri artık iç <span> sarmalayıcı
+          kullanıyor)

@@ -561,14 +561,14 @@ const App = (() => {
       <tr class="kargo-table__row${delivered ? " kargo-table__row--delivered" : ""}" data-kargo-id="${kargo.id}">
         ${opts.selectMode ? `<td class="kargo-table__select-td"><input type="checkbox" class="kargo-row-check" data-id="${kargo.id}" /></td>` : ""}
         <td>${firmaLogoHtml(kargo.kargo_firmasi)}</td>
-        <td class="kargo-table__alici"><i class='bx bx-user'></i>${UI.escapeHtml(kargo.alici_ad_soyad)}${etiketNote}</td>
-        <td class="kargo-table__urun-adi"><i class='bx bx-cube'></i>${UI.escapeHtml(adText)}</td>
+        <td class="kargo-table__alici"><span class="kargo-table__cell-flex"><i class='bx bx-user'></i>${UI.escapeHtml(kargo.alici_ad_soyad)}</span>${etiketNote}</td>
+        <td class="kargo-table__urun-adi"><span class="kargo-table__cell-flex"><i class='bx bx-cube'></i>${UI.escapeHtml(adText)}</span></td>
         <td class="kargo-table__adet">${adet}</td>
-        ${opts.showEkleyen ? `<td class="kargo-table__kargocu"><i class='bx bx-id-card'></i>${UI.escapeHtml(kargo.kullanicilar?.ad_soyad || "-")}</td>` : ""}
+        ${opts.showEkleyen ? `<td class="kargo-table__kargocu"><span class="kargo-table__cell-flex"><i class='bx bx-id-card'></i>${UI.escapeHtml(kargo.kullanicilar?.ad_soyad || "-")}</span></td>` : ""}
         <td>${durumBadge(kargo.durum)}</td>
         <td class="kargo-table__tarih">${UI.formatDateTime(kargo.olusturma_tarihi)}</td>
         <td class="kargo-table__tarih">${kargo.cikis_tarihi ? UI.formatDateTime(kargo.cikis_tarihi) : "—"}</td>
-        ${opts.showActions ? `<td class="kargo-table__actions">${kargoActionsHtml(kargo, "row")}</td>` : ""}
+        ${opts.showActions ? `<td class="kargo-table__actions"><span class="kargo-table__actions-inner">${kargoActionsHtml(kargo, "row")}</span></td>` : ""}
         <td class="kargo-table__expand-td">
           <button type="button" class="kargo-table__expand-btn js-row-expand" data-target="${detailId}" aria-label="Detay"><i class='bx bx-chevron-down'></i></button>
         </td>
