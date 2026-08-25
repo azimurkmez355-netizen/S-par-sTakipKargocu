@@ -606,17 +606,30 @@ const Depo = (() => {
       // genel catch'e düşüp "kargo kaydedilemedi" diyordu — oysa kargo ve
       // ürünler zaten kaydedilmiş oluyordu (görevlinin bildirdiği "hata
       // veriyor ama kargo kaydediliyor" karışıklığının kaynağı buydu).
-      let photoWarning = null;
-      if (photoRows.length) {
+      // Fotoğraflar TEK bir toplu istek yerine BİRER BİRER gönderiliyor —
+      // birden fazla fotoğrafın (her biri ~yüzlerce KB base64) hepsini tek
+      // bir JSON gövdesinde birleştirmek, bazı cihaz/ağlarda isteğin
+      // gövdesinin bozulmasına/kesilmesine yol açıyordu (PostgREST bunu
+      // "Empty or invalid json" olarak raporluyor — canlı ortamda görüldü).
+      // Tek tek göndermek hem bu riski dağıtıyor hem de bir fotoğraf
+      // başarısız olsa bile diğerlerinin kaydedilmesine izin veriyor.
+      let photoFailCount = 0;
+      let photoFirstError = null;
+      for (const row of photoRows) {
         try {
-          await Api.insert("kargo_fotograflari", photoRows);
+          await Api.insert("kargo_fotograflari", [row]);
         } catch (photoErr) {
-          photoWarning = photoErr.message || "Fotoğraflar yüklenemedi.";
+          photoFailCount += 1;
+          photoFirstError = photoFirstError || photoErr.message || "Bilinmeyen hata";
         }
       }
 
-      if (photoWarning) {
-        UI.toast(`Kargo kaydedildi, ama fotoğraflar yüklenemedi: ${photoWarning}`, "error", 8000);
+      if (photoFailCount) {
+        UI.toast(
+          `Kargo kaydedildi, ama ${photoFailCount}/${photoRows.length} fotoğraf yüklenemedi: ${photoFirstError}`,
+          "error",
+          8000
+        );
       } else {
         UI.toast("Kargo başarıyla kaydedildi.", "success");
       }
@@ -792,10 +805,30 @@ const Depo = (() => {
     }
   }
 
+  let exitHistoryRefreshId = null;
+  function scheduleExitHistoryRefresh(token) {
+    if (exitHistoryRefreshId) clearTimeout(exitHistoryRefreshId);
+    exitHistoryRefreshId = setTimeout(() => {
+      exitHistoryRefreshId = null;
+      loadExitHistory(token, new Date());
+    }, 600);
+  }
+
   /**
    * QR eşleştirme: kargo_kod alanına göre arar. Üç sonuç: eşleşme yok,
    * eşleşme var ama zaten teslim edilmiş (uyarı, DB'ye yazmaz), ya da
    * eşleşme var ve teslim edilir (race-safe update + günlük kaydı).
+   *
+   * v8.13 — arka arkaya hızlı okutma: kamera artık bu paketin ağ
+   * çağrıları bitene KADAR beklemiyor; aynı QR'ın tekrar işlenmesini
+   * engelleyen soğuma kaydı yazılır yazılmaz (ağ çağrılarından ÖNCE)
+   * `resumeLive()` çağrılıp bir sonraki etiket taranmaya başlanıyor —
+   * bu paketin sonucu arka planda gelir. En sık senaryo (henüz teslim
+   * edilmemiş bir kargo) artık SELECT+UPDATE+INSERT yerine doğrudan
+   * UPDATE+INSERT (2 ağ çağrısı) ile hallediliyor — alıcı adı gibi
+   * bilgiler UPDATE'in döndürdüğü satırdan alınıyor; SELECT sadece
+   * UPDATE hiçbir satırı değiştirmediğinde (kargo hiç yok ya da zaten
+   * teslim edilmiş) nedeni öğrenmek için ayrıca yapılıyor.
    */
   async function handleQrScan(qrText, token) {
     const value = (qrText || "").trim();
@@ -811,13 +844,47 @@ const Depo = (() => {
     }
     lastHandledQr = value;
     lastHandledAt = now;
+    QrScanner.resumeLive(); // bir sonraki paketi hemen taramaya başla, bu paketin sonucunu bekleme
 
     const statusEl = document.getElementById("scanner-status");
+    const timestamp = new Date().toISOString();
 
     try {
+      // durum=neq.Teslim Edildi: iki görevli aynı anda okutursa (yarış durumu)
+      // sadece biri güncellesin diye koşullu update.
+      const updated = await Api.update(
+        "kargolar",
+        `qr_kod=eq.${encodeURIComponent(value)}&durum=neq.${encodeURIComponent("Teslim Edildi")}`,
+        {
+          durum: "Teslim Edildi",
+          cikis_tarihi: timestamp,
+          teslim_eden_kullanici_id: currentUser.id,
+          teslim_eden_adi: currentUser.ad_soyad
+        }
+      );
+
+      if (updated.length) {
+        const kargo = updated[0];
+        await Api.insert("kargo_cikis_kayitlari", {
+          kargo_id: kargo.id,
+          kullanici_id: currentUser.id,
+          okutma_tarihi: timestamp
+        });
+        UI.toast(`${kargo.alici_ad_soyad} — Teslim Edildi olarak işaretlendi`, "success");
+        if (statusEl) {
+          statusEl.className = "scanner-status success";
+          statusEl.innerHTML = `<i class='bx bx-check-circle'></i> ${UI.escapeHtml(kargo.alici_ad_soyad)} teslim edildi.`;
+        }
+        scheduleExitHistoryRefresh(token);
+        return;
+      }
+
+      // UPDATE hiçbir satırı değiştirmedi — ya bu QR hiç kayıtlı değil ya da
+      // zaten teslim edilmiş/az önce başkası tarafından teslim edilmiş.
+      // Nedeni öğrenmek için burada ayrıca bakılıyor.
       const kargolar = await Api.select(
         "kargolar",
-        `qr_kod=eq.${encodeURIComponent(value)}&select=id,alici_ad_soyad,kargo_firmasi,durum,cikis_tarihi,teslim_eden_adi`
+        `qr_kod=eq.${encodeURIComponent(value)}&select=alici_ad_soyad,durum,cikis_tarihi,teslim_eden_adi`
       );
 
       if (!kargolar.length) {
@@ -830,54 +897,16 @@ const Depo = (() => {
       }
 
       const kargo = kargolar[0];
-
-      if (kargo.durum === "Teslim Edildi") {
-        const detay = kargo.teslim_eden_adi
-          ? ` — ${kargo.teslim_eden_adi} tarafından ${UI.formatDateTime(kargo.cikis_tarihi)}`
-          : "";
-        UI.toast(`${kargo.alici_ad_soyad}: Bu kargo zaten teslim edildi${detay}`, "info");
-        if (statusEl) {
-          statusEl.className = "scanner-status info";
-          statusEl.innerHTML = `<i class='bx bx-info-circle'></i> Zaten teslim edildi${UI.escapeHtml(detay)}`;
-        }
-        return;
-      }
-
-      const timestamp = new Date().toISOString();
-      // durum=neq.Teslim Edildi: iki görevli aynı anda okutursa (yarış durumu)
-      // sadece biri güncellesin diye koşullu update.
-      const updated = await Api.update(
-        "kargolar",
-        `id=eq.${kargo.id}&durum=neq.${encodeURIComponent("Teslim Edildi")}`,
-        {
-          durum: "Teslim Edildi",
-          cikis_tarihi: timestamp,
-          teslim_eden_kullanici_id: currentUser.id,
-          teslim_eden_adi: currentUser.ad_soyad
-        }
-      );
-
-      if (!updated.length) {
-        UI.toast(`${kargo.alici_ad_soyad}: Bu kargo az önce başka biri tarafından teslim edildi.`, "info");
-        return;
-      }
-
-      await Api.insert("kargo_cikis_kayitlari", {
-        kargo_id: kargo.id,
-        kullanici_id: currentUser.id,
-        okutma_tarihi: timestamp
-      });
-
-      UI.toast(`${kargo.alici_ad_soyad} — Teslim Edildi olarak işaretlendi`, "success");
+      const detay = kargo.teslim_eden_adi
+        ? ` — ${kargo.teslim_eden_adi} tarafından ${UI.formatDateTime(kargo.cikis_tarihi)}`
+        : "";
+      UI.toast(`${kargo.alici_ad_soyad}: Bu kargo zaten teslim edildi${detay}`, "info");
       if (statusEl) {
-        statusEl.className = "scanner-status success";
-        statusEl.innerHTML = `<i class='bx bx-check-circle'></i> ${UI.escapeHtml(kargo.alici_ad_soyad)} teslim edildi.`;
+        statusEl.className = "scanner-status info";
+        statusEl.innerHTML = `<i class='bx bx-info-circle'></i> Zaten teslim edildi${UI.escapeHtml(detay)}`;
       }
-      loadExitHistory(token, new Date());
     } catch (err) {
       UI.toast(err.message || "İşlem başarısız", "error");
-    } finally {
-      QrScanner.resumeLive();
     }
   }
 

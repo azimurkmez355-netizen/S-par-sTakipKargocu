@@ -482,3 +482,49 @@ Değişen/eklenen dosyalar (v8.12):
   YENİ  : assets/kargo-logos/hepsijet.svg, aras-kargo.jpg, ptt-kargo.png
   DÜZEN : js/depo.js (logo yolları güncellendi, fotoğraf insert'i ayrı
           best-effort try/catch'e alındı)
+
+## v8.13 — Fotoğraf yükleme "Empty or invalid json" hatası + Kargo Çıkışı'nda hızlı arka arkaya okutma
+
+Kullanıcı gerçek cihazında (canlı ortam) test etti: kargo kaydediliyor,
+ama fotoğraflar için `API hatası (400): Empty or invalid json` alıyordu.
+Bu, tüm fotoğrafların (her biri yüz(ler)ce KB base64) TEK bir toplu
+INSERT isteğinde birleştirilmesinden kaynaklanıyordu — bazı cihaz/ağ
+koşullarında büyük istek gövdesi bozuluyor/kesiliyor, PostgREST bunu
+"boş ya da geçersiz json" olarak raporluyordu. Çözüm: fotoğraflar artık
+TEK TEK, ayrı isteklerle gönderiliyor — hem istek boyutu küçülüyor hem
+de bir fotoğraf başarısız olsa bile diğerleri kaydedilebiliyor. Hata
+mesajı da netleşti: "Kargo kaydedildi, ama X/Y fotoğraf yüklenemedi:
+<sebep>".
+
+**Kargo Çıkışı — arka arkaya hızlı okutma**: kullanıcı paketlerin QR'larının
+art arda hızlıca okutulup teslim edilebilmesini istedi. İki değişiklik:
+1. Kamera artık bir paketin ağ işlemleri (eşleştir/güncelle/günlüğe
+   yaz) bitmesini BEKLEMEDEN bir sonraki etiketi taramaya başlıyor —
+   `QrScanner.resumeLive()` artık işlem sonunda değil, aynı-QR soğuma
+   kaydı yazılır yazılmaz (ağ çağrılarından önce) çağrılıyor. Önceki
+   paketin sonucu (toast) arka planda gelmeye devam ediyor.
+2. En sık senaryo (henüz teslim edilmemiş bir kargo) artık SELECT +
+   UPDATE + INSERT (3 ağ çağrısı) yerine doğrudan UPDATE + INSERT (2 ağ
+   çağrısı) ile hallediliyor — alıcı adı gibi bilgiler UPDATE'in
+   döndürdüğü satırdan alınıyor. SELECT sadece UPDATE hiçbir satırı
+   değiştirmediğinde (kargo hiç yok ya da zaten teslim edilmiş) nedeni
+   öğrenmek için ayrıca yapılıyor.
+3. Çıkış günlüğü/istatistik yenilemesi (`loadExitHistory`) artık her
+   okutmadan hemen sonra değil, 600ms'lik bir gecikmeyle (debounce)
+   tetikleniyor — art arda hızlı okutmalarda tek tek değil, tek seferde
+   yenileniyor.
+
+**Doğrulama notu**: Bu turda canlı veritabanına gerçek bir yazma testi
+YAPILMADI — hem fotoğraf hem hızlı-okutma değişiklikleri gerçek veri
+üzerinde (kargo teslim etme, fotoğraf kaydetme) test kullanıcısı
+olmadan güvenle denenemezdi (test hesabı "depo1" kullanıcı tarafından
+silinmiş; rastgele gerçek bir kargoyu "teslim edildi" işaretleyerek
+test etmek gerçek veriyi bozardı). Değişiklikler dikkatli kod
+incelemesiyle doğrulandı, syntax kontrolünden geçti. Kullanıcının kendi
+cihazında gerçek akışla (birden fazla fotoğraf + art arda QR okutma)
+test etmesi gerekiyor.
+
+---
+Değişen dosyalar (v8.13): js/depo.js (fotoğraflar tek tek insert,
+Kargo Çıkışı update-önce akışı + anında resumeLive + debounce'lu
+geçmiş yenileme).
