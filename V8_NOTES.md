@@ -562,3 +562,49 @@ kullanıcı jesti) oluşturuluyor/devam ettiriliyor.
 ---
 Değişen dosyalar (v8.14): js/depo.js (fotoğraf boyutu küçültme + tekrar
 deneme, kasiyer bip sesi).
+
+## v8.15 — Sonuca göre farklı bip+titreşim, çoklu fotoğraf galerisi
+
+**Kargo Çıkışı sesi**: tek düz "bip" yerine artık iki farklı, ayırt
+edilebilir geri bildirim var:
+- Yeni başarılı teslimat → yükselen iki notalı onay sesi + kısa tek
+  titreşim (`playScanSuccessSound`).
+- Zaten teslim edilmiş / sistemde kayıtlı değil / hata → alçak, kısa
+  çift "buzz" uyarı sesi + çift titreşim (`playScanWarnSound`).
+Titreşim `navigator.vibrate()` ile — Android Chrome'da çalışır, **iOS
+Safari'de Vibration API hiç desteklenmiyor** (Apple'ın platform
+kısıtı, KargoTakip'in düzeltebileceği bir şey değil); iPhone'da sadece
+ses+görsel geri bildirim olur.
+
+Ses artık ham QR okunduğu anda değil, SONUÇ belli olduğunda çalıyor
+(toast ile aynı anda) — kullanıcının "zaten var" gibi farklı bir
+bildirim istemesi, sesin okumayı değil SONUCU yansıtması gerektiği
+anlamına geliyordu.
+
+**Çoklu fotoğraf galerisi**: "kaç fotoğraf eklersem ekleyeyim sadece
+1 tanesini görebiliyorum" sorunu düzeltildi. Kök neden: `openLightbox`
+her zaman tek bir görsel gösterecek şekilde yazılmıştı, `viewKargoFotolar`
+de her zaman `fotolar[0]`'ı açıyordu (geri kalanları sessizce
+görmezden geliyordu). `openLightbox` artık bir görsel dizisi kabul
+edip ok butonlarıyla (‹ ›) ve bir sayaçla ("2 / 5") gezinilebilen bir
+galeri gösteriyor; tek görsel (etiket QR'ı gibi) verildiğinde ok/sayaç
+hiç görünmüyor, eskisi gibi çalışıyor. Karttaki küçük resimler
+üzerinde tıklama da artık AYNI kargonun tüm fotoğraflarını (ürün
+fotoğrafları dahil, hepsi kargo_fotograflari tablosunda) galeri olarak
+açıyor, tıklanan fotoğraftan başlayarak. Mobilde ok butonları biraz
+küçültüldü.
+
+Doğrulama: galeri, `App.kargoCard`/`App.bindKargoCardEvents` (dışa
+açık fonksiyonlar) ile sahte çoklu-fotoğraflı bir kargo oluşturup
+gerçek uygulama üzerinden test edildi — tıklanan fotoğraftan doğru
+index'te açılma, ileri/geri ok navigasyonu (3/3'te ileri → 1/3'e
+sarma, 1/3'te geri → 3/3'e sarma) doğrulandı. Sesli/titreşimli geri
+bildirim ve fotoğraf hatası bu turda canlı yazma testi olmadan
+(bkz. v8.13/v8.14'teki aynı kısıt) kod incelemesiyle doğrulandı.
+
+---
+Değişen dosyalar (v8.15): js/depo.js (playScanSuccessSound/
+playScanWarnSound + navigator.vibrate), js/main.js (openLightbox
+galeri desteği, viewKargoFotolar tüm fotoğrafları geçiriyor,
+js-lightbox-img grup bazlı tıklama), css/style-v8.css (.lightbox-counter/
+.lightbox-nav).

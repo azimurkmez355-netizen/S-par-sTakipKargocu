@@ -805,22 +805,42 @@ const Depo = (() => {
     }
     if (scanBeepCtx && scanBeepCtx.state === "suspended") scanBeepCtx.resume().catch(() => {});
   }
-  function playScanBeep() {
+  function playTone(freq, startOffset, duration, type, peakGain) {
+    const ctx = scanBeepCtx;
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    const t0 = ctx.currentTime + startOffset;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(peakGain, t0 + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.02);
+  }
+  /** Yeni başarılı teslimat — iki notalı, yükselen onay sesi ("dırınt"). */
+  function playScanSuccessSound() {
     if (!scanBeepCtx) return;
     try {
-      const ctx = scanBeepCtx;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "square";
-      osc.frequency.value = 1500;
-      gain.gain.setValueAtTime(0.18, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.12);
+      playTone(900, 0, 0.09, "square", 0.16);
+      playTone(1500, 0.09, 0.13, "square", 0.18);
+      if (navigator.vibrate) navigator.vibrate(90);
     } catch {
-      /* ses çalışmasa da tarama akışını bozmasın */
+      /* ses/titreşim çalışmasa da tarama akışını bozmasın */
+    }
+  }
+  /** Zaten teslim edilmiş / bulunamadı / hata — alçak, kısa çift "buzz" uyarısı. */
+  function playScanWarnSound() {
+    if (!scanBeepCtx) return;
+    try {
+      playTone(320, 0, 0.11, "sawtooth", 0.16);
+      playTone(320, 0.14, 0.11, "sawtooth", 0.16);
+      if (navigator.vibrate) navigator.vibrate([70, 60, 70]);
+    } catch {
+      /* ses/titreşim çalışmasa da tarama akışını bozmasın */
     }
   }
 
@@ -876,6 +896,12 @@ const Depo = (() => {
    * bilgiler UPDATE'in döndürdüğü satırdan alınıyor; SELECT sadece
    * UPDATE hiçbir satırı değiştirmediğinde (kargo hiç yok ya da zaten
    * teslim edilmiş) nedeni öğrenmek için ayrıca yapılıyor.
+   *
+   * v8.15 — sonuca göre farklı sesli/titreşimli geri bildirim: yeni
+   * başarılı teslimatta playScanSuccessSound() (yükselen çift nota),
+   * zaten teslim edilmiş/bulunamadı/hata durumunda playScanWarnSound()
+   * (alçak çift "buzz") çalıyor — ikisi de destekleyen cihazlarda
+   * navigator.vibrate() ile eş zamanlı titreşim veriyor.
    */
   async function handleQrScan(qrText, token) {
     const value = (qrText || "").trim();
@@ -892,7 +918,6 @@ const Depo = (() => {
     lastHandledQr = value;
     lastHandledAt = now;
     QrScanner.resumeLive(); // bir sonraki paketi hemen taramaya başla, bu paketin sonucunu bekleme
-    playScanBeep(); // kasiyer barkod okuyucusu gibi — her yeni okutuşta bip
 
     const statusEl = document.getElementById("scanner-status");
     const timestamp = new Date().toISOString();
@@ -919,6 +944,7 @@ const Depo = (() => {
           okutma_tarihi: timestamp
         });
         UI.toast(`${kargo.alici_ad_soyad} — Teslim Edildi olarak işaretlendi`, "success");
+        playScanSuccessSound();
         if (statusEl) {
           statusEl.className = "scanner-status success";
           statusEl.innerHTML = `<i class='bx bx-check-circle'></i> ${UI.escapeHtml(kargo.alici_ad_soyad)} teslim edildi.`;
@@ -937,6 +963,7 @@ const Depo = (() => {
 
       if (!kargolar.length) {
         UI.toast("Bu QR sistemde kayıtlı değil.", "error");
+        playScanWarnSound();
         if (statusEl) {
           statusEl.className = "scanner-status error";
           statusEl.innerHTML = `<i class='bx bx-error-circle'></i> Bu QR sistemde kayıtlı değil.`;
@@ -949,12 +976,14 @@ const Depo = (() => {
         ? ` — ${kargo.teslim_eden_adi} tarafından ${UI.formatDateTime(kargo.cikis_tarihi)}`
         : "";
       UI.toast(`${kargo.alici_ad_soyad}: Bu kargo zaten teslim edildi${detay}`, "info");
+      playScanWarnSound();
       if (statusEl) {
         statusEl.className = "scanner-status info";
         statusEl.innerHTML = `<i class='bx bx-info-circle'></i> Zaten teslim edildi${UI.escapeHtml(detay)}`;
       }
     } catch (err) {
       UI.toast(err.message || "İşlem başarısız", "error");
+      playScanWarnSound();
     }
   }
 

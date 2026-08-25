@@ -410,7 +410,15 @@ const App = (() => {
 
   function bindKargoCardEvents(container, handlers = {}) {
     container.querySelectorAll(".js-lightbox-img").forEach((img) =>
-      img.addEventListener("click", () => openLightbox(img.src))
+      img.addEventListener("click", () => {
+        const group = img.closest(".kargo-card__fotolar");
+        if (group) {
+          const imgs = Array.from(group.querySelectorAll(".js-lightbox-img"));
+          openLightbox(imgs.map((el) => el.src), imgs.indexOf(img));
+        } else {
+          openLightbox(img.src);
+        }
+      })
     );
     container.querySelectorAll(".js-deliver-btn").forEach((btn) =>
       btn.addEventListener("click", () => handlers.onDeliver && handlers.onDeliver(btn.dataset.id))
@@ -456,7 +464,7 @@ const App = (() => {
     try {
       const rows = await Api.select("kargolar", `id=eq.${id}&select=kargo_fotograflari(foto_base64)`);
       const fotolar = (rows && rows[0] && rows[0].kargo_fotograflari) || [];
-      if (fotolar.length) openLightbox(fotolar[0].foto_base64);
+      if (fotolar.length) openLightbox(fotolar.map((f) => f.foto_base64));
       else UI.toast("Fotoğraf bulunamadı.", "info");
     } catch (err) {
       UI.toast(err.message || "Görsel yüklenemedi.", "error");
@@ -517,11 +525,41 @@ const App = (() => {
     });
   }
 
-  function openLightbox(src) {
-    UI.openModal(`
-      <button class="modal-close-x" data-close-modal><i class='bx bx-x'></i></button>
-      <img src="${src}" class="lightbox-img" alt="Kargo fotoğrafı" />
-    `, { size: "modal-box--image" });
+  /** Tek görsel (etiket) ya da birden fazla görsel (kargo/ürün fotoğrafları)
+   *  için galeri modu — ok tuşlarıyla/oklarla gezinme. Önceden sadece tek
+   *  görsel destekleniyordu; "kaç fotoğraf eklersem ekleyeyim sadece 1
+   *  tanesini görebiliyorum" geri bildirimi üzerine düzeltildi. */
+  function openLightbox(srcOrList, startIndex) {
+    const list = Array.isArray(srcOrList) ? srcOrList : [srcOrList];
+    let idx = Math.max(0, Math.min(startIndex || 0, list.length - 1));
+
+    function render() {
+      UI.openModal(
+        `
+        <button class="modal-close-x" data-close-modal><i class='bx bx-x'></i></button>
+        ${list.length > 1 ? `<div class="lightbox-counter">${idx + 1} / ${list.length}</div>` : ""}
+        <img src="${list[idx]}" class="lightbox-img" alt="Kargo fotoğrafı" />
+        ${
+          list.length > 1
+            ? `<button type="button" class="lightbox-nav lightbox-nav--prev" id="lightbox-prev" aria-label="Önceki"><i class='bx bx-chevron-left'></i></button>
+               <button type="button" class="lightbox-nav lightbox-nav--next" id="lightbox-next" aria-label="Sonraki"><i class='bx bx-chevron-right'></i></button>`
+            : ""
+        }
+      `,
+        { size: "modal-box--image" }
+      );
+      if (list.length > 1) {
+        document.getElementById("lightbox-prev").addEventListener("click", () => {
+          idx = (idx - 1 + list.length) % list.length;
+          render();
+        });
+        document.getElementById("lightbox-next").addEventListener("click", () => {
+          idx = (idx + 1) % list.length;
+          render();
+        });
+      }
+    }
+    render();
   }
 
   return {
