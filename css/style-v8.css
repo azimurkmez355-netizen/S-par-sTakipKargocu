@@ -380,14 +380,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 5px;
+  border-radius: 11px;
+  padding: 4px;
   flex-shrink: 0;
-  box-shadow: 0 1px 2px rgba(15, 20, 55, 0.05);
+  box-shadow: 0 1px 3px rgba(15, 20, 55, 0.07);
 }
 .firma-chip img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .firma-chip i { display: none; font-size: 15px; color: var(--firma-color, var(--text-faint)); }
@@ -421,34 +421,29 @@
    tanımlı. */
 .kargo-table-wrap {
   margin: 0 -40px;
-  overflow-x: auto;
   border-top: 1px solid var(--border);
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  overflow-x: hidden;
 }
-/* Scrollbar'ı kalıcı/görünür yapıyoruz — sağdaki "Teslim Tarihi" gibi
-   sütunlar dar ekranlarda kaydırma gerektirebiliyor, bunu fark ettirmek
-   için ince ama her zaman görünen bir çubuk bırakıyoruz. */
-.kargo-table-wrap::-webkit-scrollbar { height: 8px; }
-.kargo-table-wrap::-webkit-scrollbar-track { background: transparent; }
-.kargo-table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 100px; }
-.kargo-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+/* table-layout:fixed + yüzde genişlikli sütunlar (her .kargo-table__*
+   sınıfının width'i aşağıda) — tablo, sağdaki sütunlar için yatay
+   kaydırma GEREKTİRMEYECEK şekilde her zaman konteynerin %100'üne
+   oturuyor. Uzun içerik (alıcı adı, ürün listesi) satır kırıyor, sütun
+   dışına taşıp kaydırma zorunlu kılmıyor. */
 .kargo-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 13px;
-  min-width: 1120px;
 }
 .kargo-table thead th {
-  text-align: left;
+  text-align: center;
   font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-faint);
-  padding: 13px 20px;
+  padding: 13px 14px;
   background: var(--surface-alt);
-  white-space: nowrap;
   position: sticky;
   top: 0;
   z-index: 1;
@@ -457,59 +452,92 @@
 }
 .kargo-table thead th:last-child { border-right: none; }
 .kargo-table tbody td {
-  padding: 12px 20px;
+  padding: 14px 14px;
   vertical-align: middle;
-  white-space: nowrap;
-  border-bottom: 1px solid var(--border);
+  text-align: center;
+  border-bottom: 2px solid var(--border);
   border-right: 1px solid rgba(15, 20, 55, 0.05);
+  overflow: hidden;
 }
 .kargo-table tbody tr td:last-child { border-right: none; }
-/* Alıcı adı / ürün adı hücreleri uzun metinlerde satır kırabilsin diye
-   normal'e çevriliyor — ".kargo-table tbody td"dan (element+class) daha
-   yüksek özgüllük gerekiyor, yoksa nowrap kazanır ve uzun isimler taşar. */
+/* Alıcı adı / ürün adı hücreleri uzun metinlerde satır kırsın — sabit
+   sütun genişliğiyle (table-layout:fixed) taşma yerine satır kırma
+   olsun diye. */
 .kargo-table td.kargo-table__alici,
 .kargo-table td.kargo-table__urun-adi {
   white-space: normal;
+  word-break: break-word;
 }
 .kargo-table__row { transition: background 0.12s ease; }
 .kargo-table__row:hover { background: var(--surface-alt); }
-/* Teslim edilen kargonun satırı, düz/doygun bir renkle "boyamak" yerine
-   düşük opasiteli bir yeşil katmanla hafifçe vurgulanıyor — daha modern/
-   sade, tek bakışta ayırt edilebiliyor ama tabloyu "boyanmış" göstermiyor. */
-.kargo-table__row--delivered { background: rgba(34, 197, 94, 0.07); }
-.kargo-table__row--delivered:hover { background: rgba(34, 197, 94, 0.12); }
-.kargo-table__row--delivered + .kargo-table__detail-row td { background: rgba(34, 197, 94, 0.045); }
+/* Teslim edilen satırın arka planını tam boyamak yerine (metnin
+   okunurluğunu düşürüyordu — kullanıcı "yazılar silik duruyor" dedi)
+   sadece ilk hücrenin sol kenarına ince bir yeşil vurgu konuyor; asıl
+   durum bilgisi zaten DURUM rozetinde net okunuyor. inset box-shadow
+   kullanılıyor ki hücre genişliğine/hizasına dokunmasın (gerçek bir
+   border, kutunun kutu-modelini değiştirip komşu satırlarla hizasını
+   kaydırabilirdi). */
+.kargo-table__row--delivered td:first-child {
+  box-shadow: inset 3px 0 0 var(--green);
+}
 /* ÖNEMLİ: display:flex hiçbir zaman doğrudan bir <td>'ye uygulanmıyor —
    bunu yapmak td'yi tablonun hücre/sütun düzeninden tamamen çıkarır
    (vertical-align işe yaramaz hale gelir, komşu sütunlarla üst üste
    binebilir). İkon+metin satırı bunun yerine hücre içindeki bu <span>
-   sarmalayıcıya uygulanıyor, <td> her zaman table-cell olarak kalıyor. */
+   sarmalayıcıya uygulanıyor, <td> her zaman table-cell olarak kalıyor.
+   inline-flex (flex değil) kullanılıyor ki içerik shrink-wrap olsun ve
+   td'nin text-align:center'ı onu gerçekten ortalayabilsin. */
 .kargo-table__cell-flex {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  max-width: 100%;
 }
+/* Ürün adı hücresi birden fazla ürünü alt alta listeleyebiliyor —
+   ikon en üstteki satırla değil, tüm listenin tepesiyle hizalansın. */
+.kargo-table__cell-flex--top { align-items: flex-start; }
 .kargo-table__cell-flex i {
   font-size: 15px;
   color: var(--text-faint);
   flex-shrink: 0;
 }
-.kargo-table__alici { font-weight: 700; color: var(--text); min-width: 130px; max-width: 200px; }
-.kargo-table__etiket-no { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 700; color: var(--primary); }
-.kargo-table__urun-adi { color: var(--text-muted); min-width: 150px; max-width: 230px; }
-.kargo-table__kargocu { color: var(--text-muted); min-width: 100px; }
-.kargo-table__adet { text-align: center; font-weight: 700; color: var(--text); }
-.kargo-table__tarih { color: var(--text-muted); font-size: 12px; min-width: 118px; }
-.kargo-table__select-td, .kargo-table__select-th { width: 30px; }
+.kargo-table__logo { width: 7%; }
+.kargo-table__alici { width: 13%; font-weight: 700; color: var(--text); }
+/* Etiket rozeti artık düz renkli metin değil, gerçek bir mavi "pill" —
+   kullanıcı "mavi renkli belirgin olsun" istedi. JS tarafında bir <br>
+   ile isimden ayrı satıra düşürülüyor. */
+.kargo-table__etiket-no {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 5px;
+  padding: 2px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--primary);
+  border-radius: 100px;
+  letter-spacing: 0.02em;
+}
+.kargo-table__urun-adi { width: 19%; color: var(--text-muted); }
+.kargo-table__urun-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.kargo-table__urun-list span { overflow-wrap: break-word; }
+/* Kargocu ismi kırmızı ve belirgin — kullanıcının özel isteği (color
+   inherited property olduğu için td'ye vermek iç span'e de yayılıyor). */
+.kargo-table__kargocu { width: 9%; color: var(--red); font-weight: 700; }
+.kargo-table__kargocu i { color: var(--red); }
+.kargo-table__durum { width: 11%; }
+.kargo-table__adet { width: 5%; font-weight: 700; color: var(--text); }
+.kargo-table__tarih { width: 10%; color: var(--text-muted); font-size: 12px; }
+.kargo-table__select-td, .kargo-table__select-th { width: 4%; }
 /* İki buton için sabit genişlik — teslim edilmiş satırlarda "Teslim
    Edildi" butonu visibility:hidden ile gizleniyor ama YER KAPLAMAYA
    devam ediyor, böylece yanındaki çöp kutusu satırdan satıra kaymıyor
    (kullanıcının bildirdiği hizalama hatasıydı). Flex, td'nin kendisine
    değil içindeki .kargo-table__actions-inner sarmalayıcıya uygulanıyor
    — nedeni yukarıdaki .kargo-table__cell-flex notuyla aynı. */
-.kargo-table__actions { width: 76px; text-align: center; }
+.kargo-table__actions { width: 8%; }
 .kargo-table__actions-inner { display: inline-flex; align-items: center; gap: 6px; }
-.kargo-table__expand-td { width: 40px; text-align: center; }
+.kargo-table__expand-td { width: 4%; }
 .kargo-table__expand-btn {
   width: 28px;
   height: 28px;
@@ -525,7 +553,7 @@
 }
 .kargo-table__expand-btn:hover { background: var(--primary-light); color: var(--primary); }
 .kargo-table__expand-btn.is-open { transform: rotate(180deg); color: var(--primary); }
-.kargo-table__detail-row td { padding: 0; border-bottom: 1px solid var(--border); background: var(--surface-alt); }
+.kargo-table__detail-row td { padding: 0; border-bottom: 2px solid var(--border); background: var(--surface-alt); }
 
 /* ---- Satır/kart genişleyince açılan detay içeriği (ürünler, etiket/
    fotoğraflar, teslim bilgisi) — hem masaüstü tablo hem mobil kartta
@@ -579,9 +607,10 @@
   background: var(--surface);
   padding: 12px 14px;
 }
-/* Teslim edilen kargonun kartı, masaüstü tablosundaki aynı düşük-opasiteli
-   yeşil vurguyla işaretleniyor — düz/doygun bir dolgu yerine ince bir katman. */
-.kargo-mcard--delivered { background: rgba(34, 197, 94, 0.07); border-color: rgba(34, 197, 94, 0.3); }
+/* Teslim edilen kargonun kartı — masaüstü tablosundaki gibi tam arka
+   plan boyamak yerine (metin okunurluğunu düşürüyordu) sol kenarda ince
+   bir yeşil vurgu şeridi kullanılıyor, durum zaten rozette net okunuyor. */
+.kargo-mcard--delivered { border-left: 3px solid var(--green); }
 .kargo-mcard__head { display: flex; align-items: center; gap: 10px; }
 .kargo-mcard__alici {
   flex: 1 1 auto;
@@ -597,7 +626,10 @@
   color: var(--text);
 }
 .kargo-mcard__alici i { font-size: 15px; color: var(--text-faint); flex-shrink: 0; }
-.kargo-mcard__etiket-no { margin-top: 6px; font-size: 11px; font-weight: 700; color: var(--primary); }
+/* İçindeki asıl rozet .kargo-table__etiket-no (mavi pill) — bu sarmalayıcı
+   sadece üstten boşluk bırakıyor. */
+.kargo-mcard__etiket-no { margin-top: 6px; }
+.kargo-mcard__grid strong.kargo-mcard__kargocu { color: var(--red); font-weight: 700; }
 .kargo-mcard__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

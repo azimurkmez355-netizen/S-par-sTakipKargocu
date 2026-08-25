@@ -354,7 +354,7 @@ img { max-width: 100%; display: block; }
 
 .sidebar__nav {
   display: flex; flex-direction: column; gap: 5px;
-  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
 }
 .nav-item {
   display: flex; align-items: center; gap: 12px;
@@ -846,6 +846,23 @@ img { max-width: 100%; display: block; }
   }
   .sidebar--open { transform: translateX(0); }
   .main-content { padding: 20px 16px 40px; order: 1; }
+
+  /* Mobilde çıkış yap butonu artık sidebar'ın EN ÜSTÜNDE — kullanıcı
+     kartı + çıkış butonu brand'ın hemen altına, menüden önce geliyor.
+     Sadece flex "order" ile — DOM sırası değişmiyor, masaüstünde
+     (bu media query dışında) eskisi gibi altta kalmaya devam ediyor. */
+  .sidebar__brand { order: 0; }
+  .sidebar__user { order: 1; margin-bottom: 8px; }
+  .sidebar__logout {
+    order: 2;
+    margin-bottom: 18px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    border-radius: 13px 13px 0 0;
+  }
+  .sidebar__role-badge { order: 3; }
+  .sidebar__nav { order: 4; }
+  .sidebar__spacer { display: none; }
 
   .role-cards { grid-template-columns: 1fr 1fr; }
   .role-card { padding: 20px 10px; }

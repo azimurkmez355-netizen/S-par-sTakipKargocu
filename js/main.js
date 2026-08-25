@@ -511,12 +511,15 @@ const App = (() => {
       </div>`;
   }
 
+  /** adList: paketteki HER ürünün adı ayrı bir eleman olarak — çağıran
+   *  taraf (tablo hücresi/mobil kart) bunları alt alta listeliyor, artık
+   *  "+2 ürün daha" ile gizlenmiyor (kullanıcı hepsini görmek istedi). */
   function kargoUrunOzet(kargo) {
     const urunler = kargo.kargo_urunleri || [];
-    if (!urunler.length) return { adText: "-", adet: 0 };
-    const adText = urunler.length === 1 ? urunler[0].urun_adi : `${urunler[0].urun_adi} +${urunler.length - 1} ürün daha`;
     const adet = urunler.reduce((sum, u) => sum + (u.adet || 1), 0);
-    return { adText, adet };
+    if (!urunler.length) return { adList: ["-"], adet: 0 };
+    const adList = urunler.map((u) => (u.adet && u.adet !== 1 ? `${u.adet}x ${u.urun_adi}` : u.urun_adi));
+    return { adList, adet };
   }
 
   function tableColCount(opts) {
@@ -553,19 +556,21 @@ const App = (() => {
   }
 
   function kargoTableRowPairHtml(kargo, opts) {
-    const { adText, adet } = kargoUrunOzet(kargo);
-    const etiketNote = kargo.etiket_sayisi > 1 ? ` <span class="kargo-row__etiket-no">Etiket ${kargo.etiket_no}/${kargo.etiket_sayisi}</span>` : "";
+    const { adList, adet } = kargoUrunOzet(kargo);
+    const etiketNote = kargo.etiket_sayisi > 1 ? `<br><span class="kargo-table__etiket-no">Etiket ${kargo.etiket_no}/${kargo.etiket_sayisi}</span>` : "";
     const detailId = `kargo-detail-${kargo.id}`;
     const delivered = kargo.durum === "Teslim Edildi";
     return `
       <tr class="kargo-table__row${delivered ? " kargo-table__row--delivered" : ""}" data-kargo-id="${kargo.id}">
         ${opts.selectMode ? `<td class="kargo-table__select-td"><input type="checkbox" class="kargo-row-check" data-id="${kargo.id}" /></td>` : ""}
-        <td>${firmaLogoHtml(kargo.kargo_firmasi)}</td>
+        <td class="kargo-table__logo">${firmaLogoHtml(kargo.kargo_firmasi)}</td>
         <td class="kargo-table__alici"><span class="kargo-table__cell-flex"><i class='bx bx-user'></i>${UI.escapeHtml(kargo.alici_ad_soyad)}</span>${etiketNote}</td>
-        <td class="kargo-table__urun-adi"><span class="kargo-table__cell-flex"><i class='bx bx-cube'></i>${UI.escapeHtml(adText)}</span></td>
+        <td class="kargo-table__urun-adi"><span class="kargo-table__cell-flex kargo-table__cell-flex--top"><i class='bx bx-cube'></i><span class="kargo-table__urun-list">${adList
+          .map((n) => `<span>${UI.escapeHtml(n)}</span>`)
+          .join("")}</span></span></td>
         <td class="kargo-table__adet">${adet}</td>
         ${opts.showEkleyen ? `<td class="kargo-table__kargocu"><span class="kargo-table__cell-flex"><i class='bx bx-id-card'></i>${UI.escapeHtml(kargo.kullanicilar?.ad_soyad || "-")}</span></td>` : ""}
-        <td>${durumBadge(kargo.durum)}</td>
+        <td class="kargo-table__durum">${durumBadge(kargo.durum)}</td>
         <td class="kargo-table__tarih">${UI.formatDateTime(kargo.olusturma_tarihi)}</td>
         <td class="kargo-table__tarih">${kargo.cikis_tarihi ? UI.formatDateTime(kargo.cikis_tarihi) : "—"}</td>
         ${opts.showActions ? `<td class="kargo-table__actions"><span class="kargo-table__actions-inner">${kargoActionsHtml(kargo, "row")}</span></td>` : ""}
@@ -579,7 +584,7 @@ const App = (() => {
   }
 
   function kargoMobileCardHtml(kargo, opts) {
-    const { adText, adet } = kargoUrunOzet(kargo);
+    const { adList, adet } = kargoUrunOzet(kargo);
     const etiketNote = kargo.etiket_sayisi > 1 ? `Etiket ${kargo.etiket_no}/${kargo.etiket_sayisi}` : "";
     const detailId = `kargo-mdetail-${kargo.id}`;
     const delivered = kargo.durum === "Teslim Edildi";
@@ -593,9 +598,9 @@ const App = (() => {
         </div>
         ${etiketNote ? `<div class="kargo-mcard__etiket-no">${etiketNote}</div>` : ""}
         <div class="kargo-mcard__grid">
-          <div><span><i class='bx bx-cube'></i> Ürün</span><strong>${UI.escapeHtml(adText)}</strong></div>
+          <div><span><i class='bx bx-cube'></i> Ürün</span><strong>${adList.map((n) => UI.escapeHtml(n)).join("<br>")}</strong></div>
           <div><span>Adet</span><strong>${adet}</strong></div>
-          ${opts.showEkleyen ? `<div><span><i class='bx bx-id-card'></i> Kargocu</span><strong>${UI.escapeHtml(kargo.kullanicilar?.ad_soyad || "-")}</strong></div>` : ""}
+          ${opts.showEkleyen ? `<div><span><i class='bx bx-id-card'></i> Kargocu</span><strong class="kargo-mcard__kargocu">${UI.escapeHtml(kargo.kullanicilar?.ad_soyad || "-")}</strong></div>` : ""}
           <div><span>Paketlenme</span><strong>${UI.formatDateTime(kargo.olusturma_tarihi)}</strong></div>
           <div><span>Teslim</span><strong>${kargo.cikis_tarihi ? UI.formatDateTime(kargo.cikis_tarihi) : "—"}</strong></div>
         </div>
@@ -616,16 +621,16 @@ const App = (() => {
           <thead>
             <tr>
               ${opts.selectMode ? `<th class="kargo-table__select-th"></th>` : ""}
-              <th>Kargo Şirketi</th>
-              <th>Alıcı Adı</th>
-              <th>Ürün Adı</th>
-              <th>Adet</th>
-              ${opts.showEkleyen ? "<th>Kargocu</th>" : ""}
-              <th>Durum</th>
-              <th>Paketlenme Tarihi</th>
-              <th>Teslim Tarihi</th>
-              ${opts.showActions ? "<th></th>" : ""}
-              <th></th>
+              <th class="kargo-table__logo">Kargo Şirketi</th>
+              <th class="kargo-table__alici">Alıcı Adı</th>
+              <th class="kargo-table__urun-adi">Ürün Adı</th>
+              <th class="kargo-table__adet">Adet</th>
+              ${opts.showEkleyen ? `<th class="kargo-table__kargocu">Kargocu</th>` : ""}
+              <th class="kargo-table__durum">Durum</th>
+              <th class="kargo-table__tarih">Paketlenme Tarihi</th>
+              <th class="kargo-table__tarih">Teslim Tarihi</th>
+              ${opts.showActions ? `<th class="kargo-table__actions"></th>` : ""}
+              <th class="kargo-table__expand-td"></th>
             </tr>
           </thead>
           <tbody>
