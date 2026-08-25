@@ -443,3 +443,42 @@ birebir doğrulanamadı.
 Değişen dosyalar (v8.11): css/style.css (`html` için `overflow-x:hidden`),
 css/style-v8.css (`.main-content`/`.topbar-mobile` mobil sağlamlaştırma,
 aura inset küçültme).
+
+## v8.12 — Gerçek kargo firması logoları + "kaydedildi ama görsel gelmedi" karışıklığı
+
+Kullanıcı 3 logoyu (Wikimedia Commons/Vikipedi'den resmi kaynak
+URL'leri) verdi, buradan indirilip repoya eklendi:
+`assets/kargo-logos/hepsijet.svg` (Hepsiburada resmi logosu — HepsiJET
+için), `aras-kargo.jpg`, `ptt-kargo.png`. `FIRMALAR` dizisindeki `logo`
+yolları bu gerçek dosya adlarıyla güncellendi (kullanıcının önceden
+elle eklediği, artık gereksiz `hepsijet.png`/`aras-kargo.png` silindi).
+
+**"Her şeyi doldurup gönderiyorum, API hatası veriyor ama kargo yine de
+kaydediliyor, sadece görseller gelmiyor" hatası düzeltildi.** Kök
+neden: `onSubmitKargo` kargo + ürünleri VE fotoğrafları tek bir
+try/catch içinde sırayla ekliyordu — fotoğraf ekleme adımı
+(`kargo_fotograflari`, muhtemelen henüz çalıştırılmamış `kargo_urun_id`
+migration'ı yüzünden) başarısız olunca kod genel catch'e düşüp "kargo
+kaydedilemedi" diyordu, oysa kargo ve ürünler zaten (ayrı, önceki API
+çağrılarıyla) başarıyla kaydedilmişti — kullanıcının gördüğü "hata
+veriyor ama kaydediliyor" çelişkisinin kaynağı tam olarak buydu.
+Fotoğraf ekleme artık kendi ayrı try/catch'i içinde, "best effort"
+olarak deneniyor: başarısız olursa kargo yine de kaydedilmiş sayılıyor,
+listeye yönlendiriliyor, ama "Kargo kaydedildi, ama fotoğraflar
+yüklenemedi: <sebep>" gibi net, çelişkili olmayan bir mesaj gösteriyor.
+Bu, migration çalıştırılmış olsa da olmasa da (ör. ileride bir ağ
+sorunu vb.) doğru davranan kalıcı bir düzeltme.
+
+**Hâlâ çalıştırılması gerekiyorsa** (v8.10'dan beri istenen, veri
+kaybetmeyen migration — kargo_urunleri.sku artık kaydedilebiliyor
+olduğuna göre muhtemelen sadece ikinci satır eksik):
+```sql
+ALTER TABLE kargo_urunleri ALTER COLUMN sku DROP NOT NULL;
+ALTER TABLE kargo_fotograflari ADD COLUMN IF NOT EXISTS kargo_urun_id BIGINT REFERENCES kargo_urunleri(id) ON DELETE CASCADE;
+```
+
+---
+Değişen/eklenen dosyalar (v8.12):
+  YENİ  : assets/kargo-logos/hepsijet.svg, aras-kargo.jpg, ptt-kargo.png
+  DÜZEN : js/depo.js (logo yolları güncellendi, fotoğraf insert'i ayrı
+          best-effort try/catch'e alındı)

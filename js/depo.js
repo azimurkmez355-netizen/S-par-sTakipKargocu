@@ -16,8 +16,8 @@ const Depo = (() => {
   const QR_REPEAT_COOLDOWN_MS = 4000;
 
   const FIRMALAR = [
-    { key: "HepsiJET", label: "HepsiJET", icon: "bx-package", color: "#8B5CF6", logo: "assets/kargo-logos/hepsijet.png" },
-    { key: "ArasKargo", label: "Aras Kargo", icon: "bx-car", color: "#003399", logo: "assets/kargo-logos/aras-kargo.png" },
+    { key: "HepsiJET", label: "HepsiJET", icon: "bx-package", color: "#8B5CF6", logo: "assets/kargo-logos/hepsijet.svg" },
+    { key: "ArasKargo", label: "Aras Kargo", icon: "bx-car", color: "#003399", logo: "assets/kargo-logos/aras-kargo.jpg" },
     { key: "PTTKargo", label: "PTT Kargo", icon: "bx-envelope", color: "#F5384F", logo: "assets/kargo-logos/ptt-kargo.png" }
   ];
 
@@ -599,11 +599,27 @@ const Depo = (() => {
           photoRows.push({ kargo_id: kargo.id, kargo_urun_id: urunId, foto_base64: ph.dataUrl })
         );
       });
+      // Kargo ve ürünler kaydedildikten sonra fotoğraf yükleme AYRI, "best
+      // effort" bir adım olarak deneniyor — aynı try/catch içinde olsaydı,
+      // fotoğraf insert'i başarısız olduğunda (ör. kargo_fotograflari.
+      // kargo_urun_id kolonu henüz eklenmemiş bir veritabanında) kod aşağıdaki
+      // genel catch'e düşüp "kargo kaydedilemedi" diyordu — oysa kargo ve
+      // ürünler zaten kaydedilmiş oluyordu (görevlinin bildirdiği "hata
+      // veriyor ama kargo kaydediliyor" karışıklığının kaynağı buydu).
+      let photoWarning = null;
       if (photoRows.length) {
-        await Api.insert("kargo_fotograflari", photoRows);
+        try {
+          await Api.insert("kargo_fotograflari", photoRows);
+        } catch (photoErr) {
+          photoWarning = photoErr.message || "Fotoğraflar yüklenemedi.";
+        }
       }
 
-      UI.toast("Kargo başarıyla kaydedildi.", "success");
+      if (photoWarning) {
+        UI.toast(`Kargo kaydedildi, ama fotoğraflar yüklenemedi: ${photoWarning}`, "error", 8000);
+      } else {
+        UI.toast("Kargo başarıyla kaydedildi.", "success");
+      }
       render("liste");
     } catch (err) {
       const msg = err.message || "";
