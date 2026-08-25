@@ -332,7 +332,8 @@ img { max-width: 100%; display: block; }
   display: flex; flex-direction: column;
   padding: 28px 20px;
   position: sticky; top: 0; height: 100vh;
-  overflow-y: auto;
+  height: 100dvh; /* mobil tarayıcının adres çubuğu gösterip/gizlemesine göre gerçek görünür yükseklik */
+  overflow: hidden; /* kaydırma artık sadece .sidebar__nav içinde — kullanıcı/çıkış butonu her zaman sabit görünsün */
   border-right: 1px solid rgba(255,255,255,0.06);
 }
 
@@ -351,7 +352,10 @@ img { max-width: 100%; display: block; }
   padding: 9px 13px; border-radius: 100px; margin-bottom: 26px; width: fit-content;
 }
 
-.sidebar__nav { display: flex; flex-direction: column; gap: 5px; }
+.sidebar__nav {
+  display: flex; flex-direction: column; gap: 5px;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+}
 .nav-item {
   display: flex; align-items: center; gap: 12px;
   background: transparent; border: none; color: var(--sidebar-text);

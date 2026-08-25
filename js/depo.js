@@ -16,8 +16,8 @@ const Depo = (() => {
   const QR_REPEAT_COOLDOWN_MS = 4000;
 
   const FIRMALAR = [
-    { key: "HepsiJET", label: "HepsiJET", icon: "bx-package", color: "#8B5CF6", logo: "assets/kargo-logos/hepsijet.svg" },
-    { key: "ArasKargo", label: "Aras Kargo", icon: "bx-car", color: "#003399", logo: "assets/kargo-logos/aras-kargo.jpg" },
+    { key: "HepsiJET", label: "HepsiJET", icon: "bx-package", color: "#8B5CF6", logo: "assets/kargo-logos/hepsijet.png" },
+    { key: "ArasKargo", label: "Aras Kargo", icon: "bx-car", color: "#003399", logo: "assets/kargo-logos/aras-kargo.png" },
     { key: "PTTKargo", label: "PTT Kargo", icon: "bx-envelope", color: "#F5384F", logo: "assets/kargo-logos/ptt-kargo.png" }
   ];
 

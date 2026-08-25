@@ -10,8 +10,8 @@ const App = (() => {
   let renderToken = 0;
 
   const FIRMA_META = {
-    HepsiJET: { icon: "bx-package", color: "#8B5CF6", logo: "assets/kargo-logos/hepsijet.svg" },
-    ArasKargo: { icon: "bx-car", color: "#003399", logo: "assets/kargo-logos/aras-kargo.jpg" },
+    HepsiJET: { icon: "bx-package", color: "#8B5CF6", logo: "assets/kargo-logos/hepsijet.png" },
+    ArasKargo: { icon: "bx-car", color: "#003399", logo: "assets/kargo-logos/aras-kargo.png" },
     PTTKargo: { icon: "bx-envelope", color: "#F5384F", logo: "assets/kargo-logos/ptt-kargo.png" }
   };
 
@@ -527,33 +527,44 @@ const App = (() => {
     return n;
   }
 
+  /** variant "row" (masaüstü tablo hücresi): Teslim Edildi butonu her
+   *  zaman DOM'da ama uygulanamıyorsa (zaten teslim edilmişse)
+   *  visibility:hidden ile gizleniyor — yoksa yanındaki çöp kutusu
+   *  butonu satıra göre sağa/sola kayıyordu (kullanıcının bildirdiği
+   *  hizalama hatası). variant "mcard" (mobil kart): kart içinde
+   *  komşu satırlarla hizalanma kaygısı yok, o yüzden orada eskisi
+   *  gibi uygulanamayan buton hiç render edilmiyor. */
   function kargoActionsHtml(kargo, variant) {
-    const cls = variant === "row" ? "kargo-row__action-btn" : "btn btn--sm";
-    const deliverCls = variant === "row" ? cls : `${cls} btn--ghost`;
-    const deleteCls = variant === "row" ? `${cls} kargo-row__action-btn--danger` : `${cls} btn--danger-ghost`;
-    const deliverLabel = variant === "row" ? "" : "<span>Teslim Edildi</span>";
-    const deleteLabel = variant === "row" ? "" : "<span>Sil</span>";
+    const showDeliver = kargo.durum !== "Teslim Edildi";
+    if (variant === "row") {
+      return `
+        <button type="button" class="kargo-row__action-btn js-deliver-btn" data-id="${kargo.id}" title="Teslim edildi işaretle"${
+        showDeliver ? "" : ' style="visibility:hidden" tabindex="-1" aria-hidden="true"'
+      }><i class='bx bx-check'></i></button>
+        <button type="button" class="kargo-row__action-btn kargo-row__action-btn--danger js-delete-btn" data-id="${kargo.id}" title="Sil"><i class='bx bx-trash'></i></button>`;
+    }
     return `
       ${
-        kargo.durum !== "Teslim Edildi"
-          ? `<button type="button" class="${deliverCls} js-deliver-btn" data-id="${kargo.id}" title="Teslim edildi işaretle"><i class='bx bx-check'></i>${deliverLabel}</button>`
+        showDeliver
+          ? `<button type="button" class="btn btn--sm btn--ghost js-deliver-btn" data-id="${kargo.id}" title="Teslim edildi işaretle"><i class='bx bx-check'></i><span>Teslim Edildi</span></button>`
           : ""
       }
-      <button type="button" class="${deleteCls} js-delete-btn" data-id="${kargo.id}" title="Sil"><i class='bx bx-trash'></i>${deleteLabel}</button>`;
+      <button type="button" class="btn btn--sm btn--danger-ghost js-delete-btn" data-id="${kargo.id}" title="Sil"><i class='bx bx-trash'></i><span>Sil</span></button>`;
   }
 
   function kargoTableRowPairHtml(kargo, opts) {
     const { adText, adet } = kargoUrunOzet(kargo);
     const etiketNote = kargo.etiket_sayisi > 1 ? ` <span class="kargo-row__etiket-no">Etiket ${kargo.etiket_no}/${kargo.etiket_sayisi}</span>` : "";
     const detailId = `kargo-detail-${kargo.id}`;
+    const delivered = kargo.durum === "Teslim Edildi";
     return `
-      <tr class="kargo-table__row" data-kargo-id="${kargo.id}">
+      <tr class="kargo-table__row${delivered ? " kargo-table__row--delivered" : ""}" data-kargo-id="${kargo.id}">
         ${opts.selectMode ? `<td class="kargo-table__select-td"><input type="checkbox" class="kargo-row-check" data-id="${kargo.id}" /></td>` : ""}
         <td>${firmaLogoHtml(kargo.kargo_firmasi)}</td>
-        <td class="kargo-table__alici">${UI.escapeHtml(kargo.alici_ad_soyad)}${etiketNote}</td>
-        <td class="kargo-table__urun-adi">${UI.escapeHtml(adText)}</td>
+        <td class="kargo-table__alici"><i class='bx bx-user'></i>${UI.escapeHtml(kargo.alici_ad_soyad)}${etiketNote}</td>
+        <td class="kargo-table__urun-adi"><i class='bx bx-cube'></i>${UI.escapeHtml(adText)}</td>
         <td class="kargo-table__adet">${adet}</td>
-        ${opts.showEkleyen ? `<td>${UI.escapeHtml(kargo.kullanicilar?.ad_soyad || "-")}</td>` : ""}
+        ${opts.showEkleyen ? `<td class="kargo-table__kargocu"><i class='bx bx-id-card'></i>${UI.escapeHtml(kargo.kullanicilar?.ad_soyad || "-")}</td>` : ""}
         <td>${durumBadge(kargo.durum)}</td>
         <td class="kargo-table__tarih">${UI.formatDateTime(kargo.olusturma_tarihi)}</td>
         <td class="kargo-table__tarih">${kargo.cikis_tarihi ? UI.formatDateTime(kargo.cikis_tarihi) : "—"}</td>
@@ -571,19 +582,20 @@ const App = (() => {
     const { adText, adet } = kargoUrunOzet(kargo);
     const etiketNote = kargo.etiket_sayisi > 1 ? `Etiket ${kargo.etiket_no}/${kargo.etiket_sayisi}` : "";
     const detailId = `kargo-mdetail-${kargo.id}`;
+    const delivered = kargo.durum === "Teslim Edildi";
     return `
-      <div class="kargo-mcard" data-kargo-id="${kargo.id}">
+      <div class="kargo-mcard${delivered ? " kargo-mcard--delivered" : ""}" data-kargo-id="${kargo.id}">
         <div class="kargo-mcard__head">
           ${opts.selectMode ? `<input type="checkbox" class="kargo-row-check" data-id="${kargo.id}" />` : ""}
           ${firmaLogoHtml(kargo.kargo_firmasi)}
-          <span class="kargo-mcard__alici">${UI.escapeHtml(kargo.alici_ad_soyad)}</span>
+          <span class="kargo-mcard__alici"><i class='bx bx-user'></i>${UI.escapeHtml(kargo.alici_ad_soyad)}</span>
           ${durumBadge(kargo.durum)}
         </div>
         ${etiketNote ? `<div class="kargo-mcard__etiket-no">${etiketNote}</div>` : ""}
         <div class="kargo-mcard__grid">
-          <div><span>Ürün</span><strong>${UI.escapeHtml(adText)}</strong></div>
+          <div><span><i class='bx bx-cube'></i> Ürün</span><strong>${UI.escapeHtml(adText)}</strong></div>
           <div><span>Adet</span><strong>${adet}</strong></div>
-          ${opts.showEkleyen ? `<div><span>Kargocu</span><strong>${UI.escapeHtml(kargo.kullanicilar?.ad_soyad || "-")}</strong></div>` : ""}
+          ${opts.showEkleyen ? `<div><span><i class='bx bx-id-card'></i> Kargocu</span><strong>${UI.escapeHtml(kargo.kullanicilar?.ad_soyad || "-")}</strong></div>` : ""}
           <div><span>Paketlenme</span><strong>${UI.formatDateTime(kargo.olusturma_tarihi)}</strong></div>
           <div><span>Teslim</span><strong>${kargo.cikis_tarihi ? UI.formatDateTime(kargo.cikis_tarihi) : "—"}</strong></div>
         </div>

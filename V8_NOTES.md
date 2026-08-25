@@ -673,6 +673,72 @@ gerçek QR okutmayla "Hangi Etiket?" akışının uçtan uca tetiklenmesi
 kod incelemesiyle doğrulandı, kullanıcının kendi cihazında test etmesi
 gerekiyor.
 
+## v8.18 — Logo boyut hatası kök nedeni (kendi CSS yorumumdaki gerçek bir hata) + tablo cilası + sidebar tam sabitleme
+
+Kullanıcı ekran görüntüsüyle gösterdi: HepsiJET logosu satırı taşacak
+kadar dev "hepsiburada" yazısı olarak render oluyordu. Kök nedenini
+araştırırken **kendi v8.17 CSS yorumumdaki gerçek bir hatayı** buldum:
+bir yorum satırında `.kargo-row*/.modal-box--kargo-detail` yazmıştım —
+`*` hemen ardından `/` geldiğinde bu CSS'te YORUM KAPATMA token'ı
+oluyor, yorumu istemeden erken kapatıp sonrasındaki Türkçe metni
+GEÇERSİZ CSS olarak parse ettiriyordu. Bu, tarayıcının `.firma-chip`
+temel kuralını (genişlik/yükseklik/display) SESSİZCE tamamen
+reddedip atmasına yol açtı — `.firma-chip img` gibi alt kurallar
+etkilenmedi, sadece ana kural gitti, bu da resmin boyutsuz bir
+`<span>` içinde kontrolsüzce büyümesine neden oldu. Yorum düzeltildi,
+`document.styleSheets` üzerinden gerçek uygulamada doğrulandı.
+
+Ayrıca **kullanıcının kendi eski PNG logoları** ("git'teki eski
+PNG'ler iyiydi") git geçmişinden (`cb78d48`) geri çıkarılıp
+Wikimedia'dan çekilen SVG/JPG/PNG üçlüsünün yerine kondu — hem
+kullanıcının tercih ettiği görünüm hem de (gerçek sabit piksel
+boyutlu PNG olduğu için) SVG'lerin intrinsic-boyut tuhaflıklarına
+karşı daha sağlam. `.firma-chip img`/`.firma-card__logo img` da
+`max-width/max-height` yerine `width:100%;height:100%` kullanacak
+şekilde sağlamlaştırıldı (kaynak format ne olursa olsun).
+
+**Tablo cilası**: Alıcı/Ürün Adı/Kargocu hücrelerine ikon eklendi;
+satır dolgusu azaltıldı (daha "ince" satırlar) ve tablo min-width'i
+980px'ten 1100px'e çıkarıldı (daha ferah sütunlar); "Teslim Edildi"
+butonu artık zaten teslim edilmiş satırlarda tamamen kaldırılmak
+yerine `visibility:hidden` ile gizleniyor — yeri hâlâ kaplandığı için
+yanındaki çöp kutusu ikonu satırdan satıra KAYMIYOR (kullanıcının
+bildirdiği hizalama hatası buydu); teslim edilen kargonun satırı/kartı
+artık baştan sona yeşile boyanıyor (sadece rozet değil).
+
+**Sidebar — bu sefer gerçekten sabit**: v8.17'nin "taşarsa kaydırılabilsin"
+çözümü kullanıcıya yetmedi ("yarısı görünür oluyor"). Bu turda daha
+iyi bir desen kullanıldı: kaydırma artık SADECE `.sidebar__nav`
+içinde (`flex:1 1 auto; min-height:0; overflow-y:auto`), `.sidebar`
+kendisi `overflow:hidden` — kullanıcı kartı ve çıkış butonu artık
+kaydırmaya hiç gerek kalmadan HER ZAMAN görünür, ekranın altına sabit.
+`height:100vh` yanında `height:100dvh` de eklendi (mobil tarayıcının
+adres çubuğu gösterip/gizlemesine göre gerçek görünür yüksekliği
+kullanmak için).
+
+**Doğrulama**: Bu tur, canlı DB'ye admin+depo salt-görüntüleme
+oturumlarıyla test edilirken tam olarak logo hatası YAKALANDI ve kök
+nedeniyle birlikte düzeltildi — `getComputedStyle` ve
+`document.styleSheets` ile hem hatalı hem düzeltilmiş hali doğrulandı.
+Sidebar'ın artık kaydırmadan HEMEN görünür olduğu (`visibleImmediately:
+true`) kısa bir viewport'ta ölçüldü. Satır arka planı/ikonlar/aksiyon
+genişliği tutarlılığı gerçek 6 kargoyla doğrulandı.
+
+---
+Değişen/silinen dosyalar (v8.18):
+  YENİ  : assets/kargo-logos/hepsijet.png, aras-kargo.png (git
+          geçmişinden geri çıkarıldı)
+  SİLİNDİ: assets/kargo-logos/hepsijet.svg, aras-kargo.jpg
+  DÜZEN : assets/kargo-logos/ptt-kargo.png (git geçmişindeki eski
+          sürümle değiştirildi), js/depo.js ve js/main.js (logo
+          yolları .png'ye döndü), css/style-v8.css (bozuk yorum
+          düzeltildi — asıl hata; firma-chip/firma-card__logo img
+          boyutlandırma sağlamlaştırıldı; tablo hücrelerine ikon;
+          .kargo-table__row--delivered/.kargo-mcard--delivered yeşil
+          arka plan; .kargo-table__actions sabit genişlik), css/style.css
+          (.sidebar/.sidebar__nav — sadece nav kaydırılabilir, kullanıcı
+          kartı+çıkış butonu her zaman sabit; 100dvh)
+
 ## v8.17 — Tüm Kargolar: gerçek tablo + mobil kart, toplu seçim, tarih filtresi + sidebar mobil scroll düzeltmesi
 
 v8.16'nın tek-satır+modal tasarımı, kullanıcının "tablo gibi olsun,
