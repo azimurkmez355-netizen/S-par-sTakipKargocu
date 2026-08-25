@@ -1140,7 +1140,7 @@ const Depo = (() => {
 
       ${App.renderKargoFilterBar()}
 
-      <div id="kargo-list-tumu" class="kargo-rows">${App.skeletonCards(4)}</div>
+      <div id="kargo-list-tumu">${App.skeletonCards(4)}</div>
     `);
 
     document.getElementById("refresh-tumu-btn").addEventListener("click", renderAllKargolarView);
@@ -1174,8 +1174,8 @@ const Depo = (() => {
       host.innerHTML = App.emptyState("bx-search-alt", "Sonuç bulunamadı", "Filtrelere uyan kargo bulunamadı.");
       return;
     }
-    host.innerHTML = list.map((k) => App.kargoRow(k, { showEkleyen: true, showActions: false })).join("");
-    App.bindKargoRowEvents(host, list, { showEkleyen: true, showActions: false });
+    host.innerHTML = App.kargoTableHtml(list, { showEkleyen: true, showActions: false });
+    App.bindKargoTableEvents(host, list, { showEkleyen: true, showActions: false });
   }
 
   return { mount };

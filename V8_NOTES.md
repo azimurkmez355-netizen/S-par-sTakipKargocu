@@ -673,6 +673,72 @@ gerçek QR okutmayla "Hangi Etiket?" akışının uçtan uca tetiklenmesi
 kod incelemesiyle doğrulandı, kullanıcının kendi cihazında test etmesi
 gerekiyor.
 
+## v8.17 — Tüm Kargolar: gerçek tablo + mobil kart, toplu seçim, tarih filtresi + sidebar mobil scroll düzeltmesi
+
+v8.16'nın tek-satır+modal tasarımı, kullanıcının "tablo gibi olsun,
+başlıklar olsun, tıklayınca modal değil satır aşağı doğru uzasın"
+geri bildirimiyle bu sürüme dönüştü:
+
+- **Gerçek `<table>`** (masaüstü): Kargo Şirketi (logo), Alıcı Adı,
+  Ürün Adı, Adet, Kargocu (ekleyen görevli), Durum, Paketlenme Tarihi,
+  Teslim Tarihi sütunları. Sağ/sol boşluk kaldırıldı — tablo
+  `.main-content`'in kendi padding'ini negatif margin ile telafi edip
+  içerik alanının tam genişliğini kullanıyor.
+- **Tıklayınca modal değil, satırın hemen altında açılan bir "detay"
+  satırı** (ürünler, etiket fotoğrafı, kargo fotoğrafları, teslim
+  bilgisi) — ok tuşuna tıklayınca açılıp kapanıyor.
+- **Mobilde (≤860px) tablo tamamen gizlenip yerine temiz bir kart
+  listesi geliyor** (aynı veriler etiket:değer ızgarası olarak,
+  karışık değil) — aynı genişleyen detay mantığı kartlarda da var.
+- **"Seç" toplu işlem modu** (sadece admin, aksiyonların olduğu yer):
+  navbar'a "Seç" butonu eklendi, aktifleşince her satırın/kartın
+  başında onay kutusu çıkıyor; alttaki çubukta "Tümünü Seç", "Teslim
+  Edildi İşaretle" ve "Sil" toplu işlemleri var (tek network çağrısıyla,
+  `id=in.(...)` — mevcut "Hepsini İşaretle" ile aynı verimli desen).
+- **Tarih aralığı filtresi** filtre çubuğuna eklendi (paketlenme
+  tarihine göre) — eski kargolar da bu sayede aranabiliyor.
+
+Ayrıca gerçek uygulama üzerinden (canlı Neon DB'ye admin/depo görünüm-
+sadece oturumla) test sırasında fark edildi: **kullanıcının önceki
+turlarda istediği migration'lar (etiket_no/etiket_sayisi, kargo_urun_id,
+sku nullable) hepsi çalıştırılmış** — `kargo_fotograflari.kargo_urun_id`
+gerçek verilerle dolu görüldü, fotoğraf kaydı artık gerçekten çalışıyor.
+
+**Ayrı bir hata da düzeltildi**: mobilde sidebar'daki "Çıkış Yap"
+butonu görünmüyordu. Kök neden: `.sidebar`de `height:100vh` vardı ama
+`overflow` tanımlı değildi — depo'nun 5 öğeli menüsü + kullanıcı kartı
++ çıkış butonu kısa ekranlarda 100vh'yi aşınca, taşan kısım (çıkış
+butonu dahil) hem görünmüyor hem kaydırılamıyordu. `overflow-y:auto`
+eklendi.
+
+**Doğrulama**: Bu tur, önceki turların aksine **gerçek canlı verilerle
+gerçek uygulama üzerinden** test edildi (admin/depo rolünde salt-
+görüntüleme amaçlı sahte oturumla — hiçbir yazma işlemi yapılmadı):
+tablo başlıkları/genişliği/logo'lar, satır-altı detay açma/kapama,
+"Seç" modu + seçim sayacı + "Vazgeç", tarih filtresi (yarının tarihini
+girip 0 sonuç, temizleyince 6 kargonun geri gelmesi), mobilde tablo→
+kart geçişi, mobil kart detay açma, ve sidebar scroll/çıkış-butonu
+görünürlüğü (kısa viewport'ta scroll öncesi görünmez → scroll sonrası
+görünür) — hepsi gerçek veriyle doğrulandı. Toplu "Teslim Edildi
+İşaretle"/"Sil" butonlarının GERÇEK tıklanması (canlı veriyi
+değiştireceği için) test edilmedi, kod incelemesiyle (mevcut "Hepsini
+İşaretle" ile aynı kalıp) doğrulandı.
+
+---
+Değişen dosyalar (v8.17):
+  DÜZEN : js/main.js (kargoTableHtml/bindKargoTableEvents/
+          kargoDetailContent/firmaLogoHtml — v8.16'nın kargoRow/
+          bindKargoRowEvents/openKargoDetailModal'ının yerini aldı;
+          filterKargolar/renderKargoFilterBar/bindKargoFilterBar tarih
+          aralığı desteği), js/admin.js ("Seç" modu + toplu işlem
+          çubuğu + bulkMarkDelivered/bulkDelete), js/depo.js (Tüm
+          Kargolar artık kargoTableHtml kullanıyor), css/style.css
+          (.sidebar'a overflow-y:auto), css/style-v8.css (.kargo-table*/
+          .kargo-mcard*/.kargo-detail/.firma-chip/.kargo-bulk-bar/
+          .filter-date-range eklendi, v8.16'nın artık kullanılmayan
+          .kargo-row*/.kargo-rows/.modal-box--kargo-detail kuralları
+          kaldırıldı)
+
 ---
 Değişen dosyalar (v8.16):
   DÜZEN : NEON_TAM_KURULUM.sql (etiket_no/etiket_sayisi, kompozit

@@ -8,6 +8,8 @@ const Admin = (() => {
   let currentUser = null;
   let allKargolar = [];
   let activeFilters = { durum: "hepsi", firma: "hepsi", q: "" };
+  let selectMode = false;
+  let selectedIds = [];
 
   function navItems() {
     return [
@@ -262,6 +264,8 @@ const Admin = (() => {
   /* ---------------- Tüm Kargolar ---------------- */
 
   async function renderKargolarView() {
+    selectMode = false;
+    selectedIds = [];
     const token = App.setContent(`
       <div class="view-header">
         <div>
@@ -270,17 +274,26 @@ const Admin = (() => {
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
           <button class="btn btn--ghost" id="refresh-kargolar-btn"><i class='bx bx-refresh'></i> Yenile</button>
+          <button class="btn btn--ghost" id="select-mode-btn"><i class='bx bx-checkbox-checked'></i> Seç</button>
           <button class="btn btn--success" id="mark-all-delivered-btn"><i class='bx bx-check-double'></i> Hepsini Teslim Edildi Olarak İşaretle</button>
         </div>
       </div>
 
       ${App.renderKargoFilterBar()}
+      <div id="kargo-bulk-bar" class="kargo-bulk-bar" hidden></div>
 
-      <div id="kargo-list" class="kargo-rows">${App.skeletonCards(4)}</div>
+      <div id="kargo-list">${App.skeletonCards(4)}</div>
     `);
 
     document.getElementById("refresh-kargolar-btn").addEventListener("click", renderKargolarView);
     document.getElementById("mark-all-delivered-btn").addEventListener("click", markAllDelivered);
+    document.getElementById("select-mode-btn").addEventListener("click", () => {
+      selectMode = !selectMode;
+      selectedIds = [];
+      document.getElementById("select-mode-btn").classList.toggle("btn--primary", selectMode);
+      paintKargoList();
+      renderBulkBar();
+    });
     App.bindKargoFilterBar((patch) => {
       Object.assign(activeFilters, patch);
       paintKargoList();
@@ -311,8 +324,111 @@ const Admin = (() => {
       host.innerHTML = App.emptyState("bx-search-alt", "Sonuç bulunamadı", "Filtrelere uyan kargo bulunamadı.");
       return;
     }
-    host.innerHTML = list.map((k) => App.kargoRow(k, { showEkleyen: true, showActions: true })).join("");
-    App.bindKargoRowEvents(host, list, { showEkleyen: true, showActions: true, onDeliver: markDelivered, onDelete: deleteKargo });
+    host.innerHTML = App.kargoTableHtml(list, { showEkleyen: true, showActions: true, selectMode });
+    App.bindKargoTableEvents(host, list, {
+      showEkleyen: true,
+      showActions: true,
+      selectMode,
+      onDeliver: markDelivered,
+      onDelete: deleteKargo,
+      onSelectionChange: (ids) => {
+        selectedIds = ids;
+        renderBulkBar();
+      }
+    });
+  }
+
+  /* ---------------- Toplu seçim çubuğu ("Seç" modu) ---------------- */
+
+  function renderBulkBar() {
+    const host = document.getElementById("kargo-bulk-bar");
+    if (!host) return;
+    if (!selectMode) {
+      host.hidden = true;
+      host.innerHTML = "";
+      return;
+    }
+    host.hidden = false;
+    host.innerHTML = `
+      <span class="kargo-bulk-bar__count">${selectedIds.length} seçili</span>
+      <button type="button" class="btn btn--ghost btn--sm" id="bulk-select-all-btn"><i class='bx bx-checkbox-checked'></i> Tümünü Seç</button>
+      <button type="button" class="btn btn--success btn--sm" id="bulk-deliver-btn" ${selectedIds.length ? "" : "disabled"}><i class='bx bx-check-double'></i> Teslim Edildi İşaretle</button>
+      <button type="button" class="btn btn--danger-ghost btn--sm" id="bulk-delete-btn" ${selectedIds.length ? "" : "disabled"}><i class='bx bx-trash'></i> Sil</button>
+      <button type="button" class="btn btn--ghost btn--sm" id="bulk-cancel-btn">Vazgeç</button>
+    `;
+    document.getElementById("bulk-select-all-btn").addEventListener("click", () => {
+      selectedIds = App.filterKargolar(allKargolar, activeFilters).map((k) => String(k.id));
+      paintKargoList();
+      renderBulkBar();
+    });
+    document.getElementById("bulk-deliver-btn").addEventListener("click", () => bulkMarkDelivered(selectedIds));
+    document.getElementById("bulk-delete-btn").addEventListener("click", () => bulkDelete(selectedIds));
+    document.getElementById("bulk-cancel-btn").addEventListener("click", () => {
+      selectMode = false;
+      selectedIds = [];
+      document.getElementById("select-mode-btn")?.classList.remove("btn--primary");
+      paintKargoList();
+      renderBulkBar();
+    });
+  }
+
+  function bulkMarkDelivered(ids) {
+    if (!ids.length) return;
+    UI.confirmDialog(
+      `${ids.length} kargo "Teslim Edildi" olarak işaretlenecek.`,
+      async () => {
+        try {
+          const nowIso = new Date().toISOString();
+          await Api.update("kargolar", `id=in.(${ids.join(",")})`, {
+            durum: "Teslim Edildi",
+            cikis_tarihi: nowIso,
+            teslim_eden_kullanici_id: currentUser.id,
+            teslim_eden_adi: currentUser.ad_soyad
+          });
+          const idSet = new Set(ids);
+          allKargolar.forEach((k) => {
+            if (idSet.has(String(k.id))) {
+              k.durum = "Teslim Edildi";
+              k.cikis_tarihi = nowIso;
+              k.teslim_eden_kullanici_id = currentUser.id;
+              k.teslim_eden_adi = currentUser.ad_soyad;
+            }
+          });
+          UI.toast(`${ids.length} kargo teslim edildi olarak işaretlendi.`, "success");
+          selectMode = false;
+          selectedIds = [];
+          document.getElementById("select-mode-btn")?.classList.remove("btn--primary");
+          paintKargoList();
+          renderBulkBar();
+        } catch (err) {
+          UI.toast(err.message || "Güncellenemedi.", "error");
+        }
+      },
+      { title: "Seçilenleri teslim edildi işaretle", confirmLabel: "Evet, işaretle" }
+    );
+  }
+
+  function bulkDelete(ids) {
+    if (!ids.length) return;
+    UI.confirmDialog(
+      `${ids.length} kargo kalıcı olarak silinecek. Bu işlem geri alınamaz.`,
+      async () => {
+        try {
+          await Api.remove("kargolar", `id=in.(${ids.join(",")})`);
+          const idSet = new Set(ids);
+          allKargolar = allKargolar.filter((k) => !idSet.has(String(k.id)));
+          UI.toast(`${ids.length} kargo silindi.`, "success");
+          selectMode = false;
+          selectedIds = [];
+          document.getElementById("select-mode-btn")?.classList.remove("btn--primary");
+          paintKargoList();
+          renderBulkBar();
+        } catch (err) {
+          UI.toast(err.message || "Silinemedi.", "error");
+        }
+      },
+      { title: "Seçilenleri sil", confirmLabel: "Evet, sil", danger: true }
+    );
   }
 
   async function markDelivered(id) {

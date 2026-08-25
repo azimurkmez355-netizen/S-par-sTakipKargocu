@@ -10,10 +10,23 @@ const App = (() => {
   let renderToken = 0;
 
   const FIRMA_META = {
-    HepsiJET: { icon: "bx-package", color: "#8B5CF6" },
-    ArasKargo: { icon: "bx-car", color: "#FF9F1C" },
-    PTTKargo: { icon: "bx-envelope", color: "#F5384F" }
+    HepsiJET: { icon: "bx-package", color: "#8B5CF6", logo: "assets/kargo-logos/hepsijet.svg" },
+    ArasKargo: { icon: "bx-car", color: "#003399", logo: "assets/kargo-logos/aras-kargo.jpg" },
+    PTTKargo: { icon: "bx-envelope", color: "#F5384F", logo: "assets/kargo-logos/ptt-kargo.png" }
   };
+
+  function firmaLogoHtml(kargoFirmasi) {
+    const firma = FIRMA_META[kargoFirmasi] || { icon: "bx-package", color: "#64748B" };
+    return `
+      <span class="firma-chip" style="--firma-color:${firma.color}" title="${UI.escapeHtml(kargoFirmasi || "")}">
+        ${
+          firma.logo
+            ? `<img src="${firma.logo}" alt="${UI.escapeHtml(kargoFirmasi || "")}" onerror="this.parentElement.classList.add('firma-chip--fallback');this.remove();" />`
+            : ""
+        }
+        <i class='bx ${firma.icon}'></i>
+      </span>`;
+  }
 
   // v8.4: kargolar.etiket_foto_base64 artık her satırda dolu ve büyük
   // (etiket fotoğrafı) — liste sorgularında select=* kullanmak, kargo
@@ -435,73 +448,204 @@ const App = (() => {
     );
   }
 
-  /* ---------------- Tüm Kargolar — tek satırlık kompakt görünüm (v8.16) ----
-     Eskiden Tüm Kargolar da diğer listeler gibi uzun kart-ızgarası
-     kullanıyordu — çok kargo varken taranması zor, çok yer kaplıyordu.
-     Artık her kargo tek, dar bir satır; tüm detaylar (etiket fotoğrafı,
-     ürün listesi, kargo fotoğrafları) satıra tıklanınca açılan bir
-     modalda gösteriliyor — modal içeriği mevcut kargoCard() çıktısını
-     aynen kullanıyor, ayrı bir "detay" şablonu yazmaya gerek kalmadı. */
+  /* ---------------- Tüm Kargolar — tablo (masaüstü) + kart (mobil) (v8.17) ----
+     v8.16'daki tek-satır+modal tasarımı kullanıcının "tablo gibi olsun,
+     başlıklar olsun, tıklayınca modal değil satır aşağı doğru uzasın"
+     geri bildirimiyle bu sürüme dönüştü. Aynı veri iki paralel şablonla
+     basılıyor (.kargo-table masaüstünde, .kargo-mcards mobilde) — hangisi
+     görüneceğine CSS media query karar veriyor, JS'in ekran boyutuna göre
+     yeniden render etmesine gerek yok. Detay ("Ürünler" listesi, etiket/
+     kargo fotoğrafları, teslim bilgisi) her ikisinde de satırın/kartın
+     HEMEN ALTINDA, tıklanınca açılan gizli bir bölüm — modal yok. */
 
-  function kargoRow(kargo, opts = {}) {
-    const firma = FIRMA_META[kargo.kargo_firmasi] || { icon: "bx-package", color: "#64748B" };
-    const urunSayisi = (kargo.kargo_urunleri || []).length;
-    const ekleyenAdi = kargo.kullanicilar?.ad_soyad;
-    const etiketNote = kargo.etiket_sayisi > 1 ? `Etiket ${kargo.etiket_no}/${kargo.etiket_sayisi}` : "";
-
+  function kargoDetailContent(kargo, opts) {
+    const urunler = kargo.kargo_urunleri || [];
+    const fotolar = kargo.kargo_fotograflari || [];
     return `
-      <div class="kargo-row" data-kargo-id="${kargo.id}">
-        <span class="kargo-row__firma" style="--firma-color:${firma.color}" title="${UI.escapeHtml(kargo.kargo_firmasi)}">
-          <i class='bx ${firma.icon}'></i>
-        </span>
-        <span class="kargo-row__alici">
-          ${UI.escapeHtml(kargo.alici_ad_soyad)}
-          ${etiketNote ? `<span class="kargo-row__etiket-no">${etiketNote}</span>` : ""}
-        </span>
-        ${opts.showEkleyen && ekleyenAdi ? `<span class="kargo-row__ekleyen"><i class='bx bx-id-card'></i>${UI.escapeHtml(ekleyenAdi)}</span>` : ""}
-        <span class="kargo-row__urun"><i class='bx bx-cube'></i>${urunSayisi}</span>
-        ${durumBadge(kargo.durum)}
-        <span class="kargo-row__tarih" title="${UI.formatDateTime(kargo.olusturma_tarihi)}">${UI.timeAgo(kargo.olusturma_tarihi)}</span>
+      <div class="kargo-detail">
+        <div class="kargo-detail__col">
+          <h4>Ürünler</h4>
+          <div class="kargo-card__urunler">
+            ${
+              urunler.length
+                ? urunler
+                    .map(
+                      (u) => `
+              <div class="urun-chip">
+                <span class="urun-chip__ad">${u.adet && u.adet !== 1 ? `<strong>${u.adet}x</strong> ` : ""}${UI.escapeHtml(u.urun_adi)}</span>
+              </div>`
+                    )
+                    .join("")
+                : `<p class="muted-text">Ürün bilgisi yok.</p>`
+            }
+          </div>
+        </div>
+        <div class="kargo-detail__col">
+          <h4>Etiket ve Fotoğraflar</h4>
+          <div class="kargo-detail__media">
+            ${
+              kargo.etiket_foto_base64
+                ? `<img src="${kargo.etiket_foto_base64}" class="js-lightbox-img kargo-detail__thumb" alt="Kargo etiketi" />`
+                : kargo.qr_kod
+                ? `<button type="button" class="kargo-card__view-btn js-view-etiket" data-kargo-id="${kargo.id}"><i class='bx bx-qr-scan'></i> Etiketi Gör</button>`
+                : `<p class="muted-text">Etiket yok.</p>`
+            }
+            ${
+              fotolar.length && fotolar[0].foto_base64
+                ? `<div class="kargo-card__fotolar">${fotolar
+                    .map((f) => `<img src="${f.foto_base64}" class="js-lightbox-img" alt="Kargo fotoğrafı" />`)
+                    .join("")}</div>`
+                : fotolar.length
+                ? `<button type="button" class="kargo-card__view-btn js-view-fotolar" data-kargo-id="${kargo.id}"><i class='bx bx-images'></i> ${fotolar.length} fotoğrafı gör</button>`
+                : ""
+            }
+          </div>
+        </div>
         ${
-          opts.showActions
-            ? `<span class="kargo-row__actions">
-                ${
-                  kargo.durum !== "Teslim Edildi"
-                    ? `<button type="button" class="kargo-row__action-btn js-deliver-btn" data-id="${kargo.id}" title="Teslim edildi işaretle"><i class='bx bx-check'></i></button>`
-                    : ""
-                }
-                <button type="button" class="kargo-row__action-btn kargo-row__action-btn--danger js-delete-btn" data-id="${kargo.id}" title="Sil"><i class='bx bx-trash'></i></button>
-              </span>`
+          kargo.durum === "Teslim Edildi" && kargo.teslim_eden_adi
+            ? `<div class="kargo-detail__teslim"><i class='bx bx-check-shield'></i> <strong>${UI.escapeHtml(
+                kargo.teslim_eden_adi
+              )}</strong> tarafından teslim edildi — ${UI.formatDateTime(kargo.cikis_tarihi)}</div>`
             : ""
         }
-        <i class='bx bx-chevron-right kargo-row__chevron'></i>
       </div>`;
   }
 
-  function openKargoDetailModal(kargo, opts) {
-    UI.openModal(
-      `<button class="modal-close-x" data-close-modal><i class='bx bx-x'></i></button>${kargoCard(kargo, opts)}`,
-      { size: "modal-box--kargo-detail" }
-    );
-    bindKargoCardEvents(document.getElementById("modal-host"), opts);
+  function kargoUrunOzet(kargo) {
+    const urunler = kargo.kargo_urunleri || [];
+    if (!urunler.length) return { adText: "-", adet: 0 };
+    const adText = urunler.length === 1 ? urunler[0].urun_adi : `${urunler[0].urun_adi} +${urunler.length - 1} ürün daha`;
+    const adet = urunler.reduce((sum, u) => sum + (u.adet || 1), 0);
+    return { adText, adet };
   }
 
-  /** list: satırların oluşturulduğu TAM kargo dizisi — satıra tıklanınca
-   *  hangi kargonun detayının açılacağını bulmak için kullanılıyor
-   *  (satırın kendisi sadece id taşıyor, tüm veriyi değil). opts hem
-   *  kargoCard'ın görünüm bayraklarını (showEkleyen/showActions) hem
-   *  bindKargoCardEvents'in handler'larını (onDeliver/onDelete) aynı
-   *  düz nesnede taşıyor — ikisi de sadece kendi ilgilendiği alanları
-   *  okuyup fazlasını yok sayıyor. */
-  function bindKargoRowEvents(container, list, opts = {}) {
-    const byId = new Map(list.map((k) => [String(k.id), k]));
-    container.querySelectorAll(".kargo-row").forEach((row) => {
-      row.addEventListener("click", (e) => {
-        if (e.target.closest(".kargo-row__actions")) return;
-        const kargo = byId.get(row.dataset.kargoId);
-        if (kargo) openKargoDetailModal(kargo, opts);
-      });
-    });
+  function tableColCount(opts) {
+    let n = 8; // firma, alıcı, ürün adı, adet, durum, paketlenme, teslim, genişlet
+    if (opts.selectMode) n += 1;
+    if (opts.showEkleyen) n += 1;
+    if (opts.showActions) n += 1;
+    return n;
+  }
+
+  function kargoActionsHtml(kargo, variant) {
+    const cls = variant === "row" ? "kargo-row__action-btn" : "btn btn--sm";
+    const deliverCls = variant === "row" ? cls : `${cls} btn--ghost`;
+    const deleteCls = variant === "row" ? `${cls} kargo-row__action-btn--danger` : `${cls} btn--danger-ghost`;
+    const deliverLabel = variant === "row" ? "" : "<span>Teslim Edildi</span>";
+    const deleteLabel = variant === "row" ? "" : "<span>Sil</span>";
+    return `
+      ${
+        kargo.durum !== "Teslim Edildi"
+          ? `<button type="button" class="${deliverCls} js-deliver-btn" data-id="${kargo.id}" title="Teslim edildi işaretle"><i class='bx bx-check'></i>${deliverLabel}</button>`
+          : ""
+      }
+      <button type="button" class="${deleteCls} js-delete-btn" data-id="${kargo.id}" title="Sil"><i class='bx bx-trash'></i>${deleteLabel}</button>`;
+  }
+
+  function kargoTableRowPairHtml(kargo, opts) {
+    const { adText, adet } = kargoUrunOzet(kargo);
+    const etiketNote = kargo.etiket_sayisi > 1 ? ` <span class="kargo-row__etiket-no">Etiket ${kargo.etiket_no}/${kargo.etiket_sayisi}</span>` : "";
+    const detailId = `kargo-detail-${kargo.id}`;
+    return `
+      <tr class="kargo-table__row" data-kargo-id="${kargo.id}">
+        ${opts.selectMode ? `<td class="kargo-table__select-td"><input type="checkbox" class="kargo-row-check" data-id="${kargo.id}" /></td>` : ""}
+        <td>${firmaLogoHtml(kargo.kargo_firmasi)}</td>
+        <td class="kargo-table__alici">${UI.escapeHtml(kargo.alici_ad_soyad)}${etiketNote}</td>
+        <td class="kargo-table__urun-adi">${UI.escapeHtml(adText)}</td>
+        <td class="kargo-table__adet">${adet}</td>
+        ${opts.showEkleyen ? `<td>${UI.escapeHtml(kargo.kullanicilar?.ad_soyad || "-")}</td>` : ""}
+        <td>${durumBadge(kargo.durum)}</td>
+        <td class="kargo-table__tarih">${UI.formatDateTime(kargo.olusturma_tarihi)}</td>
+        <td class="kargo-table__tarih">${kargo.cikis_tarihi ? UI.formatDateTime(kargo.cikis_tarihi) : "—"}</td>
+        ${opts.showActions ? `<td class="kargo-table__actions">${kargoActionsHtml(kargo, "row")}</td>` : ""}
+        <td class="kargo-table__expand-td">
+          <button type="button" class="kargo-table__expand-btn js-row-expand" data-target="${detailId}" aria-label="Detay"><i class='bx bx-chevron-down'></i></button>
+        </td>
+      </tr>
+      <tr class="kargo-table__detail-row" id="${detailId}" hidden>
+        <td colspan="${tableColCount(opts)}">${kargoDetailContent(kargo, opts)}</td>
+      </tr>`;
+  }
+
+  function kargoMobileCardHtml(kargo, opts) {
+    const { adText, adet } = kargoUrunOzet(kargo);
+    const etiketNote = kargo.etiket_sayisi > 1 ? `Etiket ${kargo.etiket_no}/${kargo.etiket_sayisi}` : "";
+    const detailId = `kargo-mdetail-${kargo.id}`;
+    return `
+      <div class="kargo-mcard" data-kargo-id="${kargo.id}">
+        <div class="kargo-mcard__head">
+          ${opts.selectMode ? `<input type="checkbox" class="kargo-row-check" data-id="${kargo.id}" />` : ""}
+          ${firmaLogoHtml(kargo.kargo_firmasi)}
+          <span class="kargo-mcard__alici">${UI.escapeHtml(kargo.alici_ad_soyad)}</span>
+          ${durumBadge(kargo.durum)}
+        </div>
+        ${etiketNote ? `<div class="kargo-mcard__etiket-no">${etiketNote}</div>` : ""}
+        <div class="kargo-mcard__grid">
+          <div><span>Ürün</span><strong>${UI.escapeHtml(adText)}</strong></div>
+          <div><span>Adet</span><strong>${adet}</strong></div>
+          ${opts.showEkleyen ? `<div><span>Kargocu</span><strong>${UI.escapeHtml(kargo.kullanicilar?.ad_soyad || "-")}</strong></div>` : ""}
+          <div><span>Paketlenme</span><strong>${UI.formatDateTime(kargo.olusturma_tarihi)}</strong></div>
+          <div><span>Teslim</span><strong>${kargo.cikis_tarihi ? UI.formatDateTime(kargo.cikis_tarihi) : "—"}</strong></div>
+        </div>
+        ${opts.showActions ? `<div class="kargo-mcard__actions">${kargoActionsHtml(kargo, "mcard")}</div>` : ""}
+        <button type="button" class="kargo-mcard__expand-btn js-row-expand" data-target="${detailId}">
+          <span>Detayları Gör</span><i class='bx bx-chevron-down'></i>
+        </button>
+        <div class="kargo-mcard__detail" id="${detailId}" hidden>${kargoDetailContent(kargo, opts)}</div>
+      </div>`;
+  }
+
+  /** Tüm Kargolar için tablo (masaüstü) + kart listesi (mobil) — ikisi de
+   *  aynı çağrıda üretiliyor, hangisinin görüneceğine CSS karar veriyor. */
+  function kargoTableHtml(list, opts = {}) {
+    return `
+      <div class="kargo-table-wrap">
+        <table class="kargo-table">
+          <thead>
+            <tr>
+              ${opts.selectMode ? `<th class="kargo-table__select-th"></th>` : ""}
+              <th>Kargo Şirketi</th>
+              <th>Alıcı Adı</th>
+              <th>Ürün Adı</th>
+              <th>Adet</th>
+              ${opts.showEkleyen ? "<th>Kargocu</th>" : ""}
+              <th>Durum</th>
+              <th>Paketlenme Tarihi</th>
+              <th>Teslim Tarihi</th>
+              ${opts.showActions ? "<th></th>" : ""}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.map((k) => kargoTableRowPairHtml(k, opts)).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="kargo-mcards">
+        ${list.map((k) => kargoMobileCardHtml(k, opts)).join("")}
+      </div>`;
+  }
+
+  /** list: tablonun/kartların oluşturulduğu TAM kargo dizisi. opts hem
+   *  görünüm bayraklarını (showEkleyen/showActions/selectMode) hem
+   *  handler'ları (onDeliver/onDelete/onSelectionChange) aynı düz
+   *  nesnede taşıyor. */
+  function bindKargoTableEvents(container, list, opts = {}) {
+    container.querySelectorAll(".js-row-expand").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const target = document.getElementById(btn.dataset.target);
+        if (!target) return;
+        const opening = target.hasAttribute("hidden");
+        if (opening) {
+          target.removeAttribute("hidden");
+          btn.classList.add("is-open");
+          bindKargoCardEvents(target, opts); // detay içindeki lightbox/etiket/fotoğraf butonları
+        } else {
+          target.setAttribute("hidden", "");
+          btn.classList.remove("is-open");
+        }
+      })
+    );
     container.querySelectorAll(".js-deliver-btn").forEach((btn) =>
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -514,6 +658,14 @@ const App = (() => {
         opts.onDelete && opts.onDelete(btn.dataset.id);
       })
     );
+    if (opts.selectMode && opts.onSelectionChange) {
+      container.querySelectorAll(".kargo-row-check").forEach((chk) =>
+        chk.addEventListener("change", () => {
+          const ids = [...new Set(Array.from(container.querySelectorAll(".kargo-row-check:checked")).map((c) => c.dataset.id))];
+          opts.onSelectionChange(ids);
+        })
+      );
+    }
   }
 
   /* Liste sorguları artık görselleri getirmiyor (bkz. KARGO_LIST_SELECT) —
@@ -570,6 +722,17 @@ const App = (() => {
           (k.kullanicilar?.ad_soyad || "").toLowerCase().includes(q)
       );
     }
+    // Tarih filtresi paketlenme tarihine (olusturma_tarihi) göre; "bitis"
+    // günün SONUNU kapsasın diye bir sonraki güne kadar dahil ediliyor
+    // (yoksa o günün saatli kayıtları filtre dışı kalıyordu).
+    if (filters.basTarih) {
+      const start = new Date(filters.basTarih + "T00:00:00");
+      out = out.filter((k) => new Date(k.olusturma_tarihi) >= start);
+    }
+    if (filters.bitTarih) {
+      const end = new Date(filters.bitTarih + "T23:59:59.999");
+      out = out.filter((k) => new Date(k.olusturma_tarihi) <= end);
+    }
     return out;
   }
 
@@ -591,10 +754,16 @@ const App = (() => {
           <option value="ArasKargo">Aras Kargo</option>
           <option value="PTTKargo">PTT Kargo</option>
         </select>
+        <div class="filter-date-range">
+          <input id="filter-bas-tarih" class="input" type="date" title="Başlangıç tarihi" />
+          <span>—</span>
+          <input id="filter-bit-tarih" class="input" type="date" title="Bitiş tarihi" />
+        </div>
       </div>`;
   }
 
-  /** Filtre çubuğu input/select event'lerini bağlar; her değişimde onChange({q|durum|firma}) çağrılır. */
+  /** Filtre çubuğu input/select event'lerini bağlar; her değişimde
+   *  onChange({q|durum|firma|basTarih|bitTarih}) çağrılır. */
   function bindKargoFilterBar(onChange) {
     document.getElementById("filter-q").addEventListener("input", (e) => {
       onChange({ q: e.target.value.toLowerCase() });
@@ -604,6 +773,12 @@ const App = (() => {
     });
     document.getElementById("filter-firma").addEventListener("change", (e) => {
       onChange({ firma: e.target.value });
+    });
+    document.getElementById("filter-bas-tarih").addEventListener("change", (e) => {
+      onChange({ basTarih: e.target.value || null });
+    });
+    document.getElementById("filter-bit-tarih").addEventListener("change", (e) => {
+      onChange({ bitTarih: e.target.value || null });
     });
   }
 
@@ -657,8 +832,8 @@ const App = (() => {
     emptyState,
     durumBadge,
     kargoCard,
-    kargoRow,
-    bindKargoRowEvents,
+    kargoTableHtml,
+    bindKargoTableEvents,
     lowPolyAvatar,
     bindKargoCardEvents,
     filterKargolar,

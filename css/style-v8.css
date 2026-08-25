@@ -349,79 +349,9 @@
 .etiket-secim-opt--done { opacity: 0.6; cursor: not-allowed; }
 .etiket-secim-opt--done:hover { border-color: var(--border); background: var(--surface-alt); }
 
-/* ---- Tüm Kargolar — tek satırlık kompakt liste (v8.16) ----
-   Eski .kargo-grid (uzun kartlar) yerine geldi; her kargo tek dar
-   satır, tamamı tıklanınca detay modalı (mevcut kargoCard içeriği)
-   açılıyor. Mobilde de tek satır kalması için daha az kritik alanlar
-   (ekleyen, ürün sayısı) dar ekranda gizleniyor — alıcı adı, firma,
-   durum ve tarih her zaman görünür kalıyor. */
-.kargo-rows {
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-.kargo-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.kargo-rows .kargo-row:last-child { border-bottom: none; }
-.kargo-row:hover { background: var(--surface-alt); }
-.kargo-row__firma {
-  flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--firma-color, var(--primary)) 12%, white);
-  color: var(--firma-color, var(--primary));
-  font-size: 15px;
-}
-.kargo-row__alici {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--text);
-}
-.kargo-row__etiket-no {
-  margin-left: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--primary);
-  white-space: nowrap;
-}
-.kargo-row__ekleyen,
-.kargo-row__urun {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-.kargo-row__tarih {
-  flex-shrink: 0;
-  font-size: 11.5px;
-  color: var(--text-faint);
-  white-space: nowrap;
-  min-width: 60px;
-  text-align: right;
-}
-.kargo-row__actions { flex-shrink: 0; display: flex; gap: 6px; }
+/* ---- Satır içi aksiyon butonları (Teslim Edildi/Sil) — masaüstü
+   tablosunda ve mobil kartta ortak kullanılıyor (v8.16'dan kalan,
+   hâlâ geçerli). ---- */
 .kargo-row__action-btn {
   width: 28px;
   height: 28px;
@@ -436,18 +366,222 @@
 }
 .kargo-row__action-btn:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
 .kargo-row__action-btn--danger:hover { background: var(--red-light); color: var(--red); border-color: var(--red); }
-.kargo-row__chevron { flex-shrink: 0; color: var(--text-faint); font-size: 18px; }
 
-@media (max-width: 720px) {
-  .kargo-row__ekleyen { display: none; }
-  .kargo-row { padding: 10px 10px; gap: 8px; }
+/* ============================================================
+   v8.17 — Tüm Kargolar: tablo (masaüstü) + kart (mobil)
+   v8.16'nın satır+modal tasarımının yerini aldı; kart üzerindeki eski
+   .kargo-row*/.modal-box--kargo-detail kuralları artık kullanılmıyor,
+   kaldırıldı.
+   ============================================================ */
+
+/* ---- Kargo firması logosu — küçük "chip" (tablo hücresi/mobil kart) ----
+   .firma-card__logo ile aynı mantık (beyaz fiş + otomatik ikon yedeği),
+   burada satır içinde kullanılabilecek kadar küçük. */
+.firma-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 28px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 3px 5px;
+  flex-shrink: 0;
 }
-@media (max-width: 520px) {
-  .kargo-row__urun span { display: none; }
-  .kargo-row__tarih { min-width: 0; font-size: 10.5px; }
+.firma-chip img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.firma-chip i { display: none; font-size: 15px; color: var(--firma-color, var(--text-faint)); }
+.firma-chip--fallback { background: var(--surface-alt); border-style: dashed; }
+.firma-chip--fallback i { display: block; }
+
+/* ---- Tarih aralığı filtresi (Tüm Kargolar filtre çubuğu) ---- */
+.filter-date-range { display: flex; align-items: center; gap: 6px; }
+.filter-date-range input { max-width: 142px; }
+.filter-date-range span { color: var(--text-faint); font-size: 12px; }
+
+/* ---- Toplu seçim çubuğu ("Seç" modu) — Depo Görevlileri'ndeki mevcut
+   .bulk-action-bar ile ÇAKIŞMASIN diye ayrı bir isim kullanılıyor. ---- */
+.kargo-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  margin-bottom: 14px;
+  background: var(--primary-light);
+  border: 1px solid rgba(var(--primary-rgb), 0.2);
+  border-radius: var(--radius-md);
+}
+.kargo-bulk-bar__count { font-size: 13px; font-weight: 700; color: var(--primary-dark); margin-right: 4px; }
+
+/* ---- Masaüstü tablo — sağda/solda boşluk bırakmadan tam genişlik.
+   .main-content'in kendi padding'ini (34px 40px masaüstü, 20px 16px
+   mobil) negatif margin ile telafi ediyor, ≤860px'te zaten gizleniyor
+   (yerine .kargo-mcards geliyor) ama tutarlılık için mobil değeri de
+   tanımlı. */
+.kargo-table-wrap {
+  margin: 0 -40px;
+  overflow-x: auto;
+  border-top: 1px solid var(--border);
+}
+.kargo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 980px;
+}
+.kargo-table thead th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  padding: 11px 14px;
+  border-bottom: 1.5px solid var(--border);
+  background: var(--surface-alt);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.kargo-table tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.kargo-table__row:hover { background: var(--surface-alt); }
+.kargo-table__alici { font-weight: 700; color: var(--text); white-space: normal; max-width: 220px; }
+.kargo-table__etiket-no { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 700; color: var(--primary); }
+.kargo-table__urun-adi { color: var(--text-muted); white-space: normal; max-width: 260px; }
+.kargo-table__adet { text-align: center; font-weight: 700; color: var(--text); }
+.kargo-table__tarih { color: var(--text-muted); font-size: 12px; }
+.kargo-table__select-td, .kargo-table__select-th { width: 30px; }
+.kargo-table__actions { display: flex; gap: 6px; }
+.kargo-table__expand-td { width: 40px; text-align: center; }
+.kargo-table__expand-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  transition: transform 0.18s ease, color 0.15s ease, background 0.15s ease;
+}
+.kargo-table__expand-btn:hover { background: var(--surface); color: var(--primary); }
+.kargo-table__expand-btn.is-open { transform: rotate(180deg); color: var(--primary); }
+.kargo-table__detail-row td { padding: 0; border-bottom: 1px solid var(--border); background: var(--surface-alt); }
+
+/* ---- Satır/kart genişleyince açılan detay içeriği (ürünler, etiket/
+   fotoğraflar, teslim bilgisi) — hem masaüstü tablo hem mobil kartta
+   ortak kullanılıyor. ---- */
+.kargo-detail {
+  padding: 18px 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  white-space: normal;
+}
+.kargo-detail__col h4 {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  margin: 0 0 10px;
+}
+.kargo-detail__media { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.kargo-detail__thumb {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  cursor: zoom-in;
+}
+.kargo-detail__teslim {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 14px;
+  margin-top: 2px;
+  border-top: 1px dashed var(--border);
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.kargo-detail__teslim i { color: var(--green); font-size: 16px; flex-shrink: 0; }
+.kargo-detail__teslim strong { color: var(--text); }
+@media (max-width: 600px) {
+  .kargo-detail { grid-template-columns: 1fr; gap: 14px; padding: 14px 16px; }
 }
 
-/* ---- Tüm Kargolar satır detay modalı — mevcut kargoCard içeriğini
-   biraz daha geniş bir modalda gösteriyor (v8.16). */
-.modal-box--kargo-detail { max-width: 480px; padding: 0; background: transparent; box-shadow: none; }
-.modal-box--kargo-detail .modal-close-x { top: 14px; right: 14px; background: rgba(0, 0, 0, 0.45); }
+/* ---- Mobil kart (≤860px, tablonun yerine geçiyor) ---- */
+.kargo-mcards { display: none; flex-direction: column; gap: 10px; }
+.kargo-mcard {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: 12px 14px;
+}
+.kargo-mcard__head { display: flex; align-items: center; gap: 10px; }
+.kargo-mcard__alici {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+}
+.kargo-mcard__etiket-no { margin-top: 6px; font-size: 11px; font-weight: 700; color: var(--primary); }
+.kargo-mcard__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+.kargo-mcard__grid > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kargo-mcard__grid span { font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-faint); }
+.kargo-mcard__grid strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kargo-mcard__actions { display: flex; gap: 8px; margin-top: 12px; }
+.kargo-mcard__expand-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.kargo-mcard__expand-btn i { transition: transform 0.18s ease; }
+.kargo-mcard__expand-btn.is-open i { transform: rotate(180deg); }
+.kargo-mcard__detail:not([hidden]) { padding-top: 4px; }
+
+@media (max-width: 860px) {
+  .kargo-table-wrap { display: none; }
+  .kargo-mcards { display: flex; }
+  .filter-date-range { width: 100%; }
+  .filter-date-range input { max-width: none; flex: 1; }
+}
