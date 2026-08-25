@@ -890,3 +890,115 @@ Değişen dosyalar (v8.19):
           sıkılaştırıldı), js/main.js (kargoTableRowPairHtml — alıcı/
           ürün/kargocu/aksiyon hücreleri artık iç <span> sarmalayıcı
           kullanıyor)
+
+---
+
+## v8.20 — Yatay kaydırma tamamen kaldırıldı, tam ortalama, kırmızı kargocu, mavi etiket rozeti, mobil sidebar üst sıra
+
+Canlıda v8.19 sonrası ekran görüntüsüyle gelen yeni talepler: satırlar
+daha belirgin ayrışsın, etiket rozeti mavi/belirgin olsun, ürün adında
+"+N ürün daha" olmasın (hepsi listelensin), teslim edilen satırda yazı
+"silik" durmasın, kargocu ismi kırmızı olsun, logolar daha net olsun,
+tüm içerik/başlıklar hücreye tam ortalansın, tablonun alt kısmındaki
+sağa-sola kaydırma tamamen kalksın, bu kaydırma sidebar'a mouse ile
+hover olununca da beliriyordu — o da düzeltilsin, ve mobilde çıkış yap
+butonu sidebar'ın en üstüne alınsın.
+
+**Yatay kaydırma kaldırma**: `.kargo-table` `table-layout:fixed` +
+`width:100%` oldu, sabit `min-width` kaldırıldı; her sütun sınıfına
+(`.kargo-table__logo/alici/urun-adi/adet/kargocu/durum/tarih/actions/
+expand-td`, hem `<th>` hem `<td>` üzerinde) toplamı 100% eden yüzdelik
+`width` verildi. `.kargo-table-wrap`'in `overflow-x` değeri `auto`'dan
+`hidden`'a çevrildi (artık gerekmiyor, ekstra güvence). Canlı 9 satırlık
+veriyle hem admin'in tam sütunlu görünümünde hem depo'nun daha az
+sütunlu salt-okunur görünümünde `wrap.scrollWidth - wrap.clientWidth
+=== 0` ölçülerek doğrulandı — her iki durumda da tablo konteyner
+genişliğine tam oturuyor, taşma yok.
+
+**Sidebar'daki "gizemli" hover-kaydırma kök nedeni bulundu**: kullanıcı
+"mouse ile sidebara hover olunca da kaydırma geliyor, butonlar
+büyüyünce sığmıyor" dedi. Kaynağı `theme-v7.css`'te unutulmuş bir
+detaydı: `.nav-item:hover { transform: translateX(2px); }` — kendi
+başına zararsız görünüyor ama `.sidebar__nav`'da SADECE `overflow-y:
+auto` tanımlıydı, `overflow-x` hiç belirtilmemişti. CSS spesifikasyonu
+gereği bir eksende `auto/scroll/hidden` verilip diğeri `visible`
+bırakılırsa, tarayıcı görünmeyen ekseni de sessizce `auto`ya çeviriyor
+— yani `.sidebar__nav`'ın zaten gizli bir `overflow-x:auto`'su vardı.
+Sağ kenara yakın bir nav-item hover'da 2px sağa kayınca bu görünmez
+`auto` eşiğini aşıp gerçek bir yatay scrollbar'ı tetikliyordu. Kalıcı
+düzeltme: `.sidebar__nav`'a açıkça `overflow-x:hidden` eklendi — hover
+efekti (kasıtlı, güzel bir mikro-etkileşim) olduğu gibi kaldı, sadece
+taşma engellendi.
+
+**Ürün listesi**: `kargoUrunOzet` artık `adText` (tek string, "+N ürün
+daha" ile kesiliyordu) yerine `adList` (her ürün ayrı eleman) döndürüyor
+— tablo hücresinde `.kargo-table__urun-list` içinde alt alta, mobil
+kartta `<br>` ile alt alta. Canlıda 3 ürünlü gerçek bir kargoyla
+doğrulandı: önceden "Gg +2 ürün daha" görünen hücre artık "Gg / Gggg /
+Hhgg" olarak üçü de görünüyor, satır yüksekliği buna göre otomatik
+büyüyor (77px → 98px, taşma/kesilme yok).
+
+**Teslim edilen satır — "silik yazı" şikayeti**: v8.19'un düşük-opasiteli
+yeşil TAM SATIR dolgusu bile (rgba(34,197,94,0.07)) — özellikle bu
+veri setinde neredeyse her satır teslim edildiği için — tüm tabloyu
+hafif soluk gösteriyordu. Tam kaldırıldı; artık satır arka planı hep
+şeffaf, sadece ilk hücreye `box-shadow: inset 3px 0 0 var(--green)` ile
+ince bir sol kenar vurgusu ekleniyor (durum zaten DURUM rozetinde net
+okunuyor). `inset` box-shadow bilinçli seçildi — gerçek bir `border`
+hücrenin kutu modelini değiştirip komşu satırlarla dikey hizasını
+kaydırabilirdi (v8.18'de çöp kutusu ikonunda yaşanan hizalama
+hatasıyla aynı risk kategorisi); `box-shadow` hiçbir layout etkisi
+yaratmadan sadece görsel katman ekliyor. Mobil kartta da aynı mantıkla
+tam dolgu yerine `border-left:3px solid var(--green)` kullanıldı (kart
+gerçek bir `<div>` olduğu için burada border risksiz).
+
+**Diğer görsel değişiklikler**: `.kargo-table__cell-flex` `display:flex`
+yerine `display:inline-flex` oldu (shrink-wrap + td'nin `text-align:
+center`'ıyla gerçekten ortalanabilsin diye — canlıda sol/sağ boşluk
+ölçülüp piksel eşitliği doğrulandı: 57px/57px); `.firma-chip` 42×42'den
+46×46'ya büyütüldü; `.kargo-table__kargocu` kırmızı+kalın; yeni
+`.kargo-table__etiket-no` düz renkli metin yerine gerçek mavi "pill"
+(beyaz yazı, `var(--primary)` arka plan) — JS'te bir `<br>` ile isimden
+ayrı satıra düşürülüyor (ayrıca fark edildi: bu rozetin CSS class'ı
+JS'te yanlışlıkla `kargo-row__etiket-no` yazılmıştı ki böyle bir kural
+hiç yoktu — v8.19'da eklenen `.kargo-table__etiket-no` kuralı hiç
+uygulanmıyordu; bu tur class adı düzeltildi, ilk kez gerçekten render
+oluyor); satır alt çizgisi 1px'ten 2px'e çıktı (dikey padding 12→14px)
+— "her satır belirgin ayrışsın" isteği için.
+
+**Mobil sidebar — çıkış yap en üstte**: `.sidebar__user`/
+`.sidebar__logout`/`.sidebar__role-badge`/`.sidebar__nav`'a sadece
+≤860px media query içinde flex `order` verildi (brand→user→logout→
+role-badge→nav), `.sidebar__spacer` mobilde `display:none`. DOM sırası
+DEĞİŞMEDİ — masaüstünde (media query dışında) hepsi `order:0` kalıp
+eskisi gibi DOM sırasına göre render oluyor (logout hâlâ altta,
+sabit). Canlıda `sidebar--open` class'ı eklenip her elemanın gerçek
+`getBoundingClientRect().top` değeri ölçülerek görsel sıra doğrulandı
+(brand 28px → user 90px → logout 162px → role-badge 229px → nav 293px),
+aynı ölçüm masaüstünde tekrarlanıp ORİJİNAL sıranın (nav → spacer →
+user → logout, en altta 828px) bozulmadığı da ayrıca doğrulandı.
+
+**Doğrulama**: Yine bu tur da Browser paneli görüntülenmediği için
+piksel ekran görüntüsü alınamadı — tüm doğrulama canlı 9 kargoluk
+veriyle (admin tam sütunlu + depo salt-okunur görünüm + 375px mobil)
+`getComputedStyle`/`getBoundingClientRect` ile yapıldı: yatay taşma
+0px (iki görünümde de), ortalamanın piksel-eşit olduğu, çok ürünlü/
+etiketli satırların doğru render olduğu, sidebar görsel sırası
+(mobil ve masaüstü ayrı ayrı), `overflow-x:hidden` değerlerinin
+gerçekten uygulandığı — hepsi ölçülerek teyit edildi. Konsol hatası
+yok. Kullanıcının kendi gözüyle canlıda onaylaması gerekiyor.
+
+---
+Değişen dosyalar (v8.20):
+  DÜZEN : css/style-v8.css (.kargo-table table-layout:fixed + yüzdelik
+          sütun genişlikleri, .kargo-table__row--delivered tam dolgu
+          yerine inset box-shadow, .kargo-table__urun-list yeni,
+          .kargo-table__etiket-no mavi pill, .kargo-table__kargocu
+          kırmızı, .firma-chip 46×46, .kargo-mcard--delivered border-
+          left, .kargo-mcard__kargocu kırmızı), css/style.css
+          (.sidebar__nav overflow-x:hidden, ≤860px media query'de
+          .sidebar__user/__logout/__role-badge/__nav flex order +
+          .sidebar__spacer display:none), js/main.js (kargoUrunOzet
+          adText→adList, kargoTableRowPairHtml/kargoMobileCardHtml/
+          kargoTableHtml thead — tüm hücrelere sütun class'ı, etiket
+          rozeti class adı düzeltmesi + <br> ile ayrı satır)
