@@ -608,3 +608,79 @@ playScanWarnSound + navigator.vibrate), js/main.js (openLightbox
 galeri desteği, viewKargoFotolar tüm fotoğrafları geçiriyor,
 js-lightbox-img grup bazlı tıklama), css/style-v8.css (.lightbox-counter/
 .lightbox-nav).
+
+## v8.16 — Çoklu etiket (aynı QR'dan birden fazla paket) + Tüm Kargolar tek satırlık liste
+
+**Çoklu etiket desteği**: bir faturada ürün çok olunca aynı kargo
+etiketinden (aynı QR) birden fazla fiziksel paket/koli çıkarılması
+gerekebiliyor. Yeni Kargo Ekle formuna **"Etiket Sayısı"** alanı
+eklendi (varsayılan 1, en fazla 20). 1'den büyük girilirse, kaydedince
+aynı QR'ı taşıyan AYRI kargo kayıtları oluşturuluyor (`etiket_no` =
+1, 2, 3…, `etiket_sayisi` = toplam) — her biri ürün/fotoğraf
+listesinin tam bir kopyasını taşıyor ve Kargo Çıkışı'nda BAĞIMSIZ
+teslim edilebiliyor. "Toplam Kargo" gibi sayımlar artık doğal olarak
+etiket sayısı kadar artıyor (çünkü gerçekten o kadar ayrı satır var).
+
+Kargo Çıkışı'nda bir QR okutulduğunda: eşleşen tek bir kargo varsa (ya
+da birden fazlasının sadece biri hâlâ bekliyorsa) eskisi gibi direkt
+işleniyor — hiçbir ekstra adım yok. Birden fazla etiket hâlâ
+BEKLİYORSA, **"Hangi Etiket?"** modalı açılıp "1. Etiket / 2. Etiket /
+3. Etiket" seçenekleri (zaten teslim edilenler pasif/işaretli) gösteriliyor;
+görevli elindeki paketi seçiyor, kamera seçim yapılana kadar duraklıyor.
+
+**Önemli mimari not**: `qr_kod` artık TEK BAŞINA eşsiz değil (aynı QR
+birden fazla etikette tekrar edebilir) — eşsizlik artık `(qr_kod,
+etiket_no)` ikilisinde. Bu yüzden v8.13'ün "SELECT atlayıp doğrudan
+UPDATE dene" hızlandırması burada GÜVENLİ DEĞİLDİ (koşulsuz bir UPDATE
+aynı anda birden fazla bekleyen etiketi teslim edebilirdi) — Kargo
+Çıkışı akışı SELECT-önce mantığına geri döndü (tek/az sayıda etiket
+için hâlâ hızlı, sadece gerçekten seçim gerektiğinde durup soruyor).
+
+**Canlı veritabanında elle çalıştırılması gereken migration** (veri
+kaybetmez, mevcut kargolar `etiket_no=1, etiket_sayisi=1` alır):
+```sql
+ALTER TABLE kargolar ADD COLUMN IF NOT EXISTS etiket_no INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE kargolar ADD COLUMN IF NOT EXISTS etiket_sayisi INTEGER NOT NULL DEFAULT 1;
+DROP INDEX IF EXISTS kargolar_qr_kod_key;
+CREATE UNIQUE INDEX IF NOT EXISTS kargolar_qr_kod_etiket_no_key ON kargolar(qr_kod, etiket_no) WHERE qr_kod IS NOT NULL;
+```
+`NEON_TAM_KURULUM.sql` sıfırdan kurulumlar için güncellendi.
+
+**Tüm Kargolar — tek satırlık kompakt liste**: eski uzun kart-ızgarası
+yerine her kargo artık tek, dar bir satır (firma ikonu, alıcı adı,
+etiket X/Y varsa rozeti, ürün sayısı, durum, tarih) — satıra tıklanınca
+tüm detaylar (etiket fotoğrafı, ürünler, kargo fotoğrafları, teslim
+bilgisi) bir modalda açılıyor. Modal içeriği mevcut `kargoCard()`
+çıktısını aynen kullanıyor, ayrı bir detay şablonu yazmaya gerek
+kalmadı. Yeni `App.kargoRow`/`App.bindKargoRowEvents` hem admin hem
+depo'nun Tüm Kargolar ekranında kullanılıyor (Kargolarım/Genel Bakış
+eski kart görünümünde kaldı — sadece Tüm Kargolar değişti). Mobilde
+daha da sıkışık ekranlarda "ekleyen" ve "ürün" metni gizlenip sadece
+temel alanlar (firma/alıcı/durum/tarih) kalıyor.
+
+Doğrulama: bu turda da canlı DB'ye gerçek bir yazma testi yapılamadı
+(bkz. v8.13/v8.14/v8.15'teki aynı kısıt — geçerli bir depo test hesabı
+yok). Ama satır listesi + detay modalı + "Hangi Etiket?" seçim modalı,
+`App.kargoRow`/`App.bindKargoRowEvents`/`UI.openModal` (dışa açık
+fonksiyonlar) ile sahte veriyle gerçek uygulama üzerinden test edildi:
+satır yüksekliği gerçekten kompakt (~52px), uzun alıcı adı düzgün
+kesiliyor (ellipsis), etiket rozetleri doğru koşullarda görünüyor/
+gizleniyor, satıra tıklama detay modalını doğru içerikle açıyor, aksiyon
+butonlarına tıklama (yanlışlıkla) detay modalını AÇMIYOR, "Hangi
+Etiket?" modalında zaten teslim edilen seçenek doğru şekilde
+pasif/soluk gösteriliyor. Kaydetme akışı (N etiket oluşturma) ve
+gerçek QR okutmayla "Hangi Etiket?" akışının uçtan uca tetiklenmesi
+kod incelemesiyle doğrulandı, kullanıcının kendi cihazında test etmesi
+gerekiyor.
+
+---
+Değişen dosyalar (v8.16):
+  DÜZEN : NEON_TAM_KURULUM.sql (etiket_no/etiket_sayisi, kompozit
+          unique index), js/depo.js (Etiket Sayısı alanı, çoklu etiket
+          insert döngüsü, handleQrScan SELECT-önce + Hangi Etiket
+          modalı), js/main.js (kargoRow/bindKargoRowEvents/
+          openKargoDetailModal, kargoCard'da etiket X/Y rozeti,
+          KARGO_LIST_SELECT'e etiket_no/etiket_sayisi eklendi),
+          js/admin.js (Tüm Kargolar artık kargoRow kullanıyor),
+          css/style-v8.css (.kargo-rows/.kargo-row*, .etiket-secim-*,
+          .modal-box--kargo-detail)

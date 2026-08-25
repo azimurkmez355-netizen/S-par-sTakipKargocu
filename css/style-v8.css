@@ -7,6 +7,13 @@
    style-v5.css'in izlediği desenle yeni bir dosyada tutuluyor.
    ============================================================ */
 
+.form-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: -2px 0 2px;
+}
+
 /* ---- Kargo Etiketi (QR) yükleme — Yeni Kargo Ekle formu ---- */
 
 .etiket-uploader { display: flex; flex-direction: column; gap: 12px; }
@@ -313,3 +320,134 @@
 @media (max-width: 640px) {
   .lightbox-nav { width: 38px; height: 38px; font-size: 20px; }
 }
+
+/* ---- Kart üzerinde "Etiket X/Y" rozeti (v8.16, çoklu etiket) ---- */
+.kargo-card__etiket-no {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+/* ---- Kargo Çıkışı — "Hangi Etiket?" seçim modalı (v8.16) ---- */
+.etiket-secim-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+.etiket-secim-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-alt);
+  transition: all 0.15s ease;
+}
+.etiket-secim-opt:hover { border-color: var(--primary); background: var(--primary-light); }
+.etiket-secim-opt__no { font-size: 14.5px; font-weight: 700; color: var(--text); }
+.etiket-secim-opt--done { opacity: 0.6; cursor: not-allowed; }
+.etiket-secim-opt--done:hover { border-color: var(--border); background: var(--surface-alt); }
+
+/* ---- Tüm Kargolar — tek satırlık kompakt liste (v8.16) ----
+   Eski .kargo-grid (uzun kartlar) yerine geldi; her kargo tek dar
+   satır, tamamı tıklanınca detay modalı (mevcut kargoCard içeriği)
+   açılıyor. Mobilde de tek satır kalması için daha az kritik alanlar
+   (ekleyen, ürün sayısı) dar ekranda gizleniyor — alıcı adı, firma,
+   durum ve tarih her zaman görünür kalıyor. */
+.kargo-rows {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.kargo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.kargo-rows .kargo-row:last-child { border-bottom: none; }
+.kargo-row:hover { background: var(--surface-alt); }
+.kargo-row__firma {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--firma-color, var(--primary)) 12%, white);
+  color: var(--firma-color, var(--primary));
+  font-size: 15px;
+}
+.kargo-row__alici {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+.kargo-row__etiket-no {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary);
+  white-space: nowrap;
+}
+.kargo-row__ekleyen,
+.kargo-row__urun {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.kargo-row__tarih {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  min-width: 60px;
+  text-align: right;
+}
+.kargo-row__actions { flex-shrink: 0; display: flex; gap: 6px; }
+.kargo-row__action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.kargo-row__action-btn:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+.kargo-row__action-btn--danger:hover { background: var(--red-light); color: var(--red); border-color: var(--red); }
+.kargo-row__chevron { flex-shrink: 0; color: var(--text-faint); font-size: 18px; }
+
+@media (max-width: 720px) {
+  .kargo-row__ekleyen { display: none; }
+  .kargo-row { padding: 10px 10px; gap: 8px; }
+}
+@media (max-width: 520px) {
+  .kargo-row__urun span { display: none; }
+  .kargo-row__tarih { min-width: 0; font-size: 10.5px; }
+}
+
+/* ---- Tüm Kargolar satır detay modalı — mevcut kargoCard içeriğini
+   biraz daha geniş bir modalda gösteriyor (v8.16). */
+.modal-box--kargo-detail { max-width: 480px; padding: 0; background: transparent; box-shadow: none; }
+.modal-box--kargo-detail .modal-close-x { top: 14px; right: 14px; background: rgba(0, 0, 0, 0.45); }

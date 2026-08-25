@@ -24,7 +24,7 @@ const App = (() => {
   // tutulup, kartlarda tıklanınca tek bir kargo için ayrıca (bindKargoCardEvents
   // içindeki js-view-etiket / js-view-fotolar) yükleniyor.
   const KARGO_LIST_SELECT =
-    "id,alici_ad_soyad,kargo_firmasi,durum,olusturma_tarihi,cikis_tarihi,qr_kod,teslim_eden_adi,ekleyen_kullanici_id,kargo_urunleri(*),kargo_fotograflari(id)";
+    "id,alici_ad_soyad,kargo_firmasi,durum,olusturma_tarihi,cikis_tarihi,qr_kod,teslim_eden_adi,ekleyen_kullanici_id,etiket_no,etiket_sayisi,kargo_urunleri(*),kargo_fotograflari(id)";
 
   function boot() {
     const session = Auth.getSession();
@@ -319,6 +319,7 @@ const App = (() => {
 
           <div class="kargo-card__ref">
             <span>${refNo(kargo.id)}</span>
+            ${kargo.etiket_sayisi > 1 ? `<span class="kargo-card__etiket-no">Etiket ${kargo.etiket_no}/${kargo.etiket_sayisi}</span>` : ""}
             <span title="${UI.formatDateTime(kargo.olusturma_tarihi)}">${UI.timeAgo(kargo.olusturma_tarihi)}</span>
           </div>
           <div class="kargo-card__barcode${kargo.etiket_foto_base64 || kargo.qr_kod ? " kargo-card__barcode--interactive" : ""}">
@@ -431,6 +432,87 @@ const App = (() => {
     );
     container.querySelectorAll(".js-view-fotolar").forEach((btn) =>
       btn.addEventListener("click", () => viewKargoFotolar(btn))
+    );
+  }
+
+  /* ---------------- Tüm Kargolar — tek satırlık kompakt görünüm (v8.16) ----
+     Eskiden Tüm Kargolar da diğer listeler gibi uzun kart-ızgarası
+     kullanıyordu — çok kargo varken taranması zor, çok yer kaplıyordu.
+     Artık her kargo tek, dar bir satır; tüm detaylar (etiket fotoğrafı,
+     ürün listesi, kargo fotoğrafları) satıra tıklanınca açılan bir
+     modalda gösteriliyor — modal içeriği mevcut kargoCard() çıktısını
+     aynen kullanıyor, ayrı bir "detay" şablonu yazmaya gerek kalmadı. */
+
+  function kargoRow(kargo, opts = {}) {
+    const firma = FIRMA_META[kargo.kargo_firmasi] || { icon: "bx-package", color: "#64748B" };
+    const urunSayisi = (kargo.kargo_urunleri || []).length;
+    const ekleyenAdi = kargo.kullanicilar?.ad_soyad;
+    const etiketNote = kargo.etiket_sayisi > 1 ? `Etiket ${kargo.etiket_no}/${kargo.etiket_sayisi}` : "";
+
+    return `
+      <div class="kargo-row" data-kargo-id="${kargo.id}">
+        <span class="kargo-row__firma" style="--firma-color:${firma.color}" title="${UI.escapeHtml(kargo.kargo_firmasi)}">
+          <i class='bx ${firma.icon}'></i>
+        </span>
+        <span class="kargo-row__alici">
+          ${UI.escapeHtml(kargo.alici_ad_soyad)}
+          ${etiketNote ? `<span class="kargo-row__etiket-no">${etiketNote}</span>` : ""}
+        </span>
+        ${opts.showEkleyen && ekleyenAdi ? `<span class="kargo-row__ekleyen"><i class='bx bx-id-card'></i>${UI.escapeHtml(ekleyenAdi)}</span>` : ""}
+        <span class="kargo-row__urun"><i class='bx bx-cube'></i>${urunSayisi}</span>
+        ${durumBadge(kargo.durum)}
+        <span class="kargo-row__tarih" title="${UI.formatDateTime(kargo.olusturma_tarihi)}">${UI.timeAgo(kargo.olusturma_tarihi)}</span>
+        ${
+          opts.showActions
+            ? `<span class="kargo-row__actions">
+                ${
+                  kargo.durum !== "Teslim Edildi"
+                    ? `<button type="button" class="kargo-row__action-btn js-deliver-btn" data-id="${kargo.id}" title="Teslim edildi işaretle"><i class='bx bx-check'></i></button>`
+                    : ""
+                }
+                <button type="button" class="kargo-row__action-btn kargo-row__action-btn--danger js-delete-btn" data-id="${kargo.id}" title="Sil"><i class='bx bx-trash'></i></button>
+              </span>`
+            : ""
+        }
+        <i class='bx bx-chevron-right kargo-row__chevron'></i>
+      </div>`;
+  }
+
+  function openKargoDetailModal(kargo, opts) {
+    UI.openModal(
+      `<button class="modal-close-x" data-close-modal><i class='bx bx-x'></i></button>${kargoCard(kargo, opts)}`,
+      { size: "modal-box--kargo-detail" }
+    );
+    bindKargoCardEvents(document.getElementById("modal-host"), opts);
+  }
+
+  /** list: satırların oluşturulduğu TAM kargo dizisi — satıra tıklanınca
+   *  hangi kargonun detayının açılacağını bulmak için kullanılıyor
+   *  (satırın kendisi sadece id taşıyor, tüm veriyi değil). opts hem
+   *  kargoCard'ın görünüm bayraklarını (showEkleyen/showActions) hem
+   *  bindKargoCardEvents'in handler'larını (onDeliver/onDelete) aynı
+   *  düz nesnede taşıyor — ikisi de sadece kendi ilgilendiği alanları
+   *  okuyup fazlasını yok sayıyor. */
+  function bindKargoRowEvents(container, list, opts = {}) {
+    const byId = new Map(list.map((k) => [String(k.id), k]));
+    container.querySelectorAll(".kargo-row").forEach((row) => {
+      row.addEventListener("click", (e) => {
+        if (e.target.closest(".kargo-row__actions")) return;
+        const kargo = byId.get(row.dataset.kargoId);
+        if (kargo) openKargoDetailModal(kargo, opts);
+      });
+    });
+    container.querySelectorAll(".js-deliver-btn").forEach((btn) =>
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        opts.onDeliver && opts.onDeliver(btn.dataset.id);
+      })
+    );
+    container.querySelectorAll(".js-delete-btn").forEach((btn) =>
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        opts.onDelete && opts.onDelete(btn.dataset.id);
+      })
     );
   }
 
@@ -575,6 +657,8 @@ const App = (() => {
     emptyState,
     durumBadge,
     kargoCard,
+    kargoRow,
+    bindKargoRowEvents,
     lowPolyAvatar,
     bindKargoCardEvents,
     filterKargolar,

@@ -55,7 +55,9 @@ CREATE TABLE kargolar (
   etiket_foto_base64 TEXT,
   cikis_tarihi TIMESTAMPTZ,
   teslim_eden_kullanici_id BIGINT REFERENCES kullanicilar(id),
-  teslim_eden_adi TEXT
+  teslim_eden_adi TEXT,
+  etiket_no INTEGER NOT NULL DEFAULT 1, -- v8.16: ayni qr_kod'dan kacinci fiziksel paket/etiket
+  etiket_sayisi INTEGER NOT NULL DEFAULT 1 -- v8.16: bu qr_kod icin toplam kac paket/etiket basildi
 );
 
 -- ============================================================
@@ -134,7 +136,9 @@ CREATE TABLE kargo_cikis_kayitlari (
 -- İNDEKSLER
 -- ============================================================
 CREATE INDEX idx_kargolar_ekleyen ON kargolar(ekleyen_kullanici_id);
-CREATE UNIQUE INDEX kargolar_qr_kod_key ON kargolar(qr_kod) WHERE qr_kod IS NOT NULL;
+-- v8.16: bir qr_kod artik birden fazla fiziksel etikette (etiket_no ile
+-- ayirt edilen) tekrar edebilir - tekil kisit artik ikili (qr_kod, etiket_no).
+CREATE UNIQUE INDEX kargolar_qr_kod_etiket_no_key ON kargolar(qr_kod, etiket_no) WHERE qr_kod IS NOT NULL;
 CREATE INDEX idx_kargo_urunleri_kargo_id ON kargo_urunleri(kargo_id);
 CREATE INDEX idx_kargo_fotograflari_kargo_id ON kargo_fotograflari(kargo_id);
 CREATE INDEX idx_mesaj_talep_mesajlari_talep_id ON mesaj_talep_mesajlari(talep_id);

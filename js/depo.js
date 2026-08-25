@@ -159,6 +159,11 @@ const Depo = (() => {
             <i class='bx bx-info-circle'></i>
             <p><strong>"QR'ı Başlat"</strong>a basıp etiketi kareye ortalayın — ışıltılı halka dolunca otomatik onaylanır. Bu QR, kargo çıkışında teslimatı eşleştirmek için kullanılır ve her kargoda zorunludur.</p>
           </div>
+          <div class="form-section">
+            <label class="form-label" for="etiket-sayisi"><i class='bx bx-copy'></i> Etiket Sayısı</label>
+            <p class="form-note">Aynı etiketten birden fazla fiziksel paket çıkardıysanız (ör. faturada çok ürün olduğu için 3 koli bastıysanız) buraya kaç tane bastığınızı girin. Tek paketse 1 bırakın.</p>
+            <input id="etiket-sayisi" class="input" type="number" min="1" max="20" step="1" value="1" style="max-width:120px" />
+          </div>
           <div class="etiket-uploader">
             ${scannerCameraWrapHtml("etiket")}
             <div id="etiket-status" class="scanner-status"></div>
@@ -549,6 +554,7 @@ const Depo = (() => {
         photos: r.productPhotos || []
       }))
       .filter((p) => p.urun_adi);
+    const etiketSayisi = Math.max(1, Math.min(20, parseInt(document.getElementById("etiket-sayisi").value, 10) || 1));
 
     if (!alici) {
       UI.toast("Alıcı ad soyad girilmelidir.", "error");
@@ -571,88 +577,72 @@ const Depo = (() => {
     btn.disabled = true;
     btn.classList.add("btn--loading");
 
+    // Etiket Sayısı 1'den büyükse, aynı QR'dan (aynı fiziksel etiketten
+    // basılan) birden fazla paket için AYRI kargo kaydı oluşturuluyor —
+    // her biri Kargo Çıkışı'nda bağımsız teslim edilebilsin diye (bkz.
+    // handleQrScan'daki "hangi etiket" seçim modalı). Her paket, girilen
+    // ürün/fotoğraf listesinin TAM bir kopyasını taşıyor — kullanıcı
+    // ürünleri paketlere ayrı ayrı dağıtmak istemedi, her etiket kendi
+    // başına faturanın tamamını gösterebilsin istedi.
+    let savedCount = 0;
+    let lastKargoError = null;
+    let photoFailCount = 0;
+    let photoTotalCount = 0;
+
     try {
-      const inserted = await Api.insert("kargolar", {
-        alici_ad_soyad: alici,
-        kargo_firmasi: firmaBtn.dataset.firma,
-        durum: "Paketlendi",
-        ekleyen_kullanici_id: currentUser.id,
-        qr_kod: etiketState.text,
-        etiket_foto_base64: etiketState.previewDataUrl
-      });
-      const kargo = inserted[0];
+      for (let etiketNo = 1; etiketNo <= etiketSayisi; etiketNo++) {
+        try {
+          const inserted = await Api.insert("kargolar", {
+            alici_ad_soyad: alici,
+            kargo_firmasi: firmaBtn.dataset.firma,
+            durum: "Paketlendi",
+            ekleyen_kullanici_id: currentUser.id,
+            qr_kod: etiketState.text,
+            etiket_foto_base64: etiketState.previewDataUrl,
+            etiket_no: etiketNo,
+            etiket_sayisi: etiketSayisi
+          });
+          const kargo = inserted[0];
 
-      const insertedProducts = await Api.insert(
-        "kargo_urunleri",
-        products.map((p) => ({ kargo_id: kargo.id, urun_adi: p.urun_adi, adet: p.adet }))
-      );
+          const insertedProducts = await Api.insert(
+            "kargo_urunleri",
+            products.map((p) => ({ kargo_id: kargo.id, urun_adi: p.urun_adi, adet: p.adet }))
+          );
 
-      // Genel kargo fotoğrafları + her ürünün kendi fotoğrafları aynı tabloya
-      // (kargo_fotograflari) gidiyor; ürün fotoğrafları kargo_urun_id ile o
-      // ürüne bağlanıyor (bkz. NEON_TAM_KURULUM.sql v8.10). insertedProducts,
-      // gönderilen products dizisiyle aynı sırada dönüyor (tek INSERT...VALUES
-      // ifadesi için Postgres bu sırayı koruyor).
-      const photoRows = photoBuffer.map((p) => ({ kargo_id: kargo.id, foto_base64: p.dataUrl }));
-      products.forEach((p, idx) => {
-        const urunId = insertedProducts[idx] && insertedProducts[idx].id;
-        p.photos.forEach((ph) =>
-          photoRows.push({ kargo_id: kargo.id, kargo_urun_id: urunId, foto_base64: ph.dataUrl })
-        );
-      });
-      // Kargo ve ürünler kaydedildikten sonra fotoğraf yükleme AYRI, "best
-      // effort" bir adım olarak deneniyor — aynı try/catch içinde olsaydı,
-      // fotoğraf insert'i başarısız olduğunda (ör. kargo_fotograflari.
-      // kargo_urun_id kolonu henüz eklenmemiş bir veritabanında) kod aşağıdaki
-      // genel catch'e düşüp "kargo kaydedilemedi" diyordu — oysa kargo ve
-      // ürünler zaten kaydedilmiş oluyordu (görevlinin bildirdiği "hata
-      // veriyor ama kargo kaydediliyor" karışıklığının kaynağı buydu).
-      // Fotoğraflar TEK bir toplu istek yerine BİRER BİRER gönderiliyor —
-      // birden fazla fotoğrafın (her biri ~yüzlerce KB base64) hepsini tek
-      // bir JSON gövdesinde birleştirmek, bazı cihaz/ağlarda isteğin
-      // gövdesinin bozulmasına/kesilmesine yol açıyordu (PostgREST bunu
-      // "Empty or invalid json" olarak raporluyor — canlı ortamda görüldü).
-      // Tek tek göndermek hem bu riski dağıtıyor hem de bir fotoğraf
-      // başarısız olsa bile diğerlerinin kaydedilmesine izin veriyor.
-      // Mobil ağlarda ara sıra tek seferlik bağlantı kesintisi/zaman aşımı
-      // yaşanabiliyor — her fotoğraf için en fazla 3 deneme (ilk + 2 tekrar,
-      // aralarında kısa bekleme) yapılıyor, sadece hepsi başarısız olursa
-      // o fotoğraf "yüklenemedi" sayılıyor.
-      let photoFailCount = 0;
-      let photoFirstError = null;
-      for (const row of photoRows) {
-        let ok = false;
-        let lastErr = null;
-        for (let attempt = 0; attempt < 3 && !ok; attempt++) {
-          try {
-            if (attempt > 0) await new Promise((r) => setTimeout(r, 500 * attempt));
-            await Api.insert("kargo_fotograflari", [row]);
-            ok = true;
-          } catch (photoErr) {
-            lastErr = photoErr;
+          // Genel kargo fotoğrafları + her ürünün kendi fotoğrafları aynı
+          // tabloya (kargo_fotograflari) gidiyor; ürün fotoğrafları
+          // kargo_urun_id ile o ürüne bağlanıyor. Fotoğraflar TEK bir toplu
+          // istek yerine BİRER BİRER, her biri en fazla 3 deneme (ilk + 2
+          // tekrar) ile gönderiliyor — büyük birleşik istek gövdesi bazı
+          // cihaz/ağlarda "Empty or invalid json" hatasına yol açıyordu;
+          // tek tek göndermek hem bu riski dağıtıyor hem bir fotoğraf
+          // başarısız olsa bile diğerlerinin kaydedilmesine izin veriyor.
+          const photoRows = photoBuffer.map((p) => ({ kargo_id: kargo.id, foto_base64: p.dataUrl }));
+          products.forEach((p, idx) => {
+            const urunId = insertedProducts[idx] && insertedProducts[idx].id;
+            p.photos.forEach((ph) =>
+              photoRows.push({ kargo_id: kargo.id, kargo_urun_id: urunId, foto_base64: ph.dataUrl })
+            );
+          });
+          photoTotalCount += photoRows.length;
+          for (const row of photoRows) {
+            let ok = false;
+            for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+              try {
+                if (attempt > 0) await new Promise((r) => setTimeout(r, 500 * attempt));
+                await Api.insert("kargo_fotograflari", [row]);
+                ok = true;
+              } catch {
+                /* aşağıda toplu sayılıyor */
+              }
+            }
+            if (!ok) photoFailCount += 1;
           }
-        }
-        if (!ok) {
-          photoFailCount += 1;
-          photoFirstError = photoFirstError || (lastErr && lastErr.message) || "Bilinmeyen hata";
-        }
-      }
 
-      if (photoFailCount) {
-        UI.toast(
-          `Kargo kaydedildi, ama ${photoFailCount}/${photoRows.length} fotoğraf yüklenemedi: ${photoFirstError}`,
-          "error",
-          8000
-        );
-      } else {
-        UI.toast("Kargo başarıyla kaydedildi.", "success");
-      }
-      render("liste");
-    } catch (err) {
-      const msg = err.message || "";
-      if (msg.includes("duplicate key value")) {
-        UI.toast("Bu QR zaten başka bir kargoda kullanılıyor. Farklı bir etiket okutun.", "error");
-      } else {
-        UI.toast(msg || "Kargo kaydedilemedi.", "error");
+          savedCount += 1;
+        } catch (err) {
+          lastKargoError = err;
+        }
       }
     } finally {
       if (btn) {
@@ -660,6 +650,22 @@ const Depo = (() => {
         btn.classList.remove("btn--loading");
       }
     }
+
+    if (!savedCount) {
+      const msg = (lastKargoError && lastKargoError.message) || "";
+      if (msg.includes("duplicate key value")) {
+        UI.toast("Bu QR zaten kullanılıyor. Farklı bir etiket okutun.", "error");
+      } else {
+        UI.toast(msg || "Kargo kaydedilemedi.", "error");
+      }
+      return;
+    }
+
+    let summary = etiketSayisi > 1 ? `${savedCount}/${etiketSayisi} etiket kaydedildi.` : "Kargo başarıyla kaydedildi.";
+    if (savedCount < etiketSayisi) summary += ` ${etiketSayisi - savedCount} etiket kaydedilemedi.`;
+    if (photoFailCount) summary += ` ${photoFailCount}/${photoTotalCount} fotoğraf yüklenemedi.`;
+    UI.toast(summary, photoFailCount || savedCount < etiketSayisi ? "error" : "success", 8000);
+    render("liste");
   }
 
   /* ---------------- Kargolarım Listesi ---------------- */
@@ -902,6 +908,18 @@ const Depo = (() => {
    * zaten teslim edilmiş/bulunamadı/hata durumunda playScanWarnSound()
    * (alçak çift "buzz") çalıyor — ikisi de destekleyen cihazlarda
    * navigator.vibrate() ile eş zamanlı titreşim veriyor.
+   *
+   * v8.16 — çoklu etiket desteği: aynı QR artık birden fazla kargo
+   * satırına ait olabilir (bkz. Yeni Kargo Ekle'deki "Etiket Sayısı").
+   * Bu yüzden v8.13'ün "doğrudan UPDATE dene" hızlandırması burada
+   * GÜVENLİ DEĞİL — qr_kod artık tekil olmadığından, koşulsuz bir UPDATE
+   * aynı anda birden fazla (henüz teslim edilmemiş) satırı birden
+   * "teslim edildi" yapabilirdi. Bunun yerine önce SELECT ile bu QR'a
+   * ait TÜM satırlar çekiliyor: tek satır (ya da bekleyen tek satır)
+   * varsa direkt işleniyor (eski tek-etiket akışı gibi hızlı); birden
+   * fazla satır hâlâ bekliyorsa "Hangi Etiket?" modalı açılıp görevli
+   * elindeki paketi seçiyor — bu durumda kamera modal kapanana kadar
+   * duraklıyor (yanlışlıkla başka bir paket bu seçimin üstüne okunmasın).
    */
   async function handleQrScan(qrText, token) {
     const value = (qrText || "").trim();
@@ -917,48 +935,13 @@ const Depo = (() => {
     }
     lastHandledQr = value;
     lastHandledAt = now;
-    QrScanner.resumeLive(); // bir sonraki paketi hemen taramaya başla, bu paketin sonucunu bekleme
 
     const statusEl = document.getElementById("scanner-status");
-    const timestamp = new Date().toISOString();
 
     try {
-      // durum=neq.Teslim Edildi: iki görevli aynı anda okutursa (yarış durumu)
-      // sadece biri güncellesin diye koşullu update.
-      const updated = await Api.update(
-        "kargolar",
-        `qr_kod=eq.${encodeURIComponent(value)}&durum=neq.${encodeURIComponent("Teslim Edildi")}`,
-        {
-          durum: "Teslim Edildi",
-          cikis_tarihi: timestamp,
-          teslim_eden_kullanici_id: currentUser.id,
-          teslim_eden_adi: currentUser.ad_soyad
-        }
-      );
-
-      if (updated.length) {
-        const kargo = updated[0];
-        await Api.insert("kargo_cikis_kayitlari", {
-          kargo_id: kargo.id,
-          kullanici_id: currentUser.id,
-          okutma_tarihi: timestamp
-        });
-        UI.toast(`${kargo.alici_ad_soyad} — Teslim Edildi olarak işaretlendi`, "success");
-        playScanSuccessSound();
-        if (statusEl) {
-          statusEl.className = "scanner-status success";
-          statusEl.innerHTML = `<i class='bx bx-check-circle'></i> ${UI.escapeHtml(kargo.alici_ad_soyad)} teslim edildi.`;
-        }
-        scheduleExitHistoryRefresh(token);
-        return;
-      }
-
-      // UPDATE hiçbir satırı değiştirmedi — ya bu QR hiç kayıtlı değil ya da
-      // zaten teslim edilmiş/az önce başkası tarafından teslim edilmiş.
-      // Nedeni öğrenmek için burada ayrıca bakılıyor.
       const kargolar = await Api.select(
         "kargolar",
-        `qr_kod=eq.${encodeURIComponent(value)}&select=alici_ad_soyad,durum,cikis_tarihi,teslim_eden_adi`
+        `qr_kod=eq.${encodeURIComponent(value)}&select=id,alici_ad_soyad,durum,cikis_tarihi,teslim_eden_adi,etiket_no,etiket_sayisi&order=etiket_no.asc`
       );
 
       if (!kargolar.length) {
@@ -968,23 +951,130 @@ const Depo = (() => {
           statusEl.className = "scanner-status error";
           statusEl.innerHTML = `<i class='bx bx-error-circle'></i> Bu QR sistemde kayıtlı değil.`;
         }
+        QrScanner.resumeLive();
         return;
       }
 
-      const kargo = kargolar[0];
+      const pending = kargolar.filter((k) => k.durum !== "Teslim Edildi");
+
+      if (pending.length <= 1) {
+        // Seçilecek gerçek bir şey yok: tek etiket varsa ya da birden
+        // fazla etiketin sadece biri bekliyorsa direkt onu işle.
+        QrScanner.resumeLive();
+        await resolveEtiketTeslim(pending[0] || kargolar[0], token, statusEl);
+        return;
+      }
+
+      // Birden fazla etiket hâlâ bekliyor — hangisi olduğunu sor. Görevli
+      // seçim yapana kadar kamera duraklıyor.
+      openEtiketSecimModal(kargolar, token, statusEl);
+    } catch (err) {
+      UI.toast(err.message || "İşlem başarısız", "error");
+      playScanWarnSound();
+      QrScanner.resumeLive();
+    }
+  }
+
+  /** Tek bir kargo satırını teslim eder (ya da zaten teslim edilmişse
+   *  bilgilendirir) — hem tek-etiketli hem çoklu-etiketli (seçim
+   *  modalından gelen) akış tarafından ortak kullanılıyor. */
+  async function resolveEtiketTeslim(kargo, token, statusEl) {
+    const etiketNote = kargo.etiket_sayisi > 1 ? ` (Etiket ${kargo.etiket_no}/${kargo.etiket_sayisi})` : "";
+
+    if (kargo.durum === "Teslim Edildi") {
       const detay = kargo.teslim_eden_adi
         ? ` — ${kargo.teslim_eden_adi} tarafından ${UI.formatDateTime(kargo.cikis_tarihi)}`
         : "";
-      UI.toast(`${kargo.alici_ad_soyad}: Bu kargo zaten teslim edildi${detay}`, "info");
+      UI.toast(`${kargo.alici_ad_soyad}${etiketNote}: Bu kargo zaten teslim edildi${detay}`, "info");
       playScanWarnSound();
       if (statusEl) {
         statusEl.className = "scanner-status info";
         statusEl.innerHTML = `<i class='bx bx-info-circle'></i> Zaten teslim edildi${UI.escapeHtml(detay)}`;
       }
+      return;
+    }
+
+    try {
+      const timestamp = new Date().toISOString();
+      // durum=neq.Teslim Edildi: iki görevli aynı anda okutursa (yarış durumu)
+      // sadece biri güncellesin diye koşullu update.
+      const updated = await Api.update(
+        "kargolar",
+        `id=eq.${kargo.id}&durum=neq.${encodeURIComponent("Teslim Edildi")}`,
+        {
+          durum: "Teslim Edildi",
+          cikis_tarihi: timestamp,
+          teslim_eden_kullanici_id: currentUser.id,
+          teslim_eden_adi: currentUser.ad_soyad
+        }
+      );
+
+      if (!updated.length) {
+        UI.toast(`${kargo.alici_ad_soyad}${etiketNote}: Bu kargo az önce başka biri tarafından teslim edildi.`, "info");
+        playScanWarnSound();
+        return;
+      }
+
+      await Api.insert("kargo_cikis_kayitlari", {
+        kargo_id: kargo.id,
+        kullanici_id: currentUser.id,
+        okutma_tarihi: timestamp
+      });
+      UI.toast(`${kargo.alici_ad_soyad}${etiketNote} — Teslim Edildi olarak işaretlendi`, "success");
+      playScanSuccessSound();
+      if (statusEl) {
+        statusEl.className = "scanner-status success";
+        statusEl.innerHTML = `<i class='bx bx-check-circle'></i> ${UI.escapeHtml(kargo.alici_ad_soyad)}${etiketNote} teslim edildi.`;
+      }
+      scheduleExitHistoryRefresh(token);
     } catch (err) {
       UI.toast(err.message || "İşlem başarısız", "error");
       playScanWarnSound();
     }
+  }
+
+  /** Aynı QR'a ait birden fazla etiket hâlâ beklerken açılan "hangi
+   *  paketi okutuyorsunuz" seçim modalı. */
+  function openEtiketSecimModal(kargolar, token, statusEl) {
+    const alici = kargolar[0].alici_ad_soyad;
+    UI.openModal(`
+      <button class="modal-close-x" data-close-modal><i class='bx bx-x'></i></button>
+      <h3 class="modal-title">Hangi Etiket?</h3>
+      <p class="modal-text">${UI.escapeHtml(alici)} için birden fazla paket etiketi var. Elinizdeki paketi seçin.</p>
+      <div class="etiket-secim-list">
+        ${kargolar
+          .map((k) => {
+            const done = k.durum === "Teslim Edildi";
+            return `
+            <button type="button" class="etiket-secim-opt${done ? " etiket-secim-opt--done" : ""}" data-id="${k.id}" ${done ? "disabled" : ""}>
+              <span class="etiket-secim-opt__no">${k.etiket_no}. Etiket</span>
+              ${
+                done
+                  ? `<span class="badge badge--success"><i class='bx bx-check'></i> Teslim Edildi</span>`
+                  : `<span class="badge badge--warning">Bekliyor</span>`
+              }
+            </button>`;
+          })
+          .join("")}
+      </div>
+    `);
+    let resumed = false;
+    const resumeOnce = () => {
+      if (resumed) return;
+      resumed = true;
+      QrScanner.resumeLive();
+    };
+    document.querySelectorAll(".etiket-secim-opt:not([disabled])").forEach((optBtn) =>
+      optBtn.addEventListener("click", async () => {
+        UI.closeModal();
+        const kargo = kargolar.find((k) => String(k.id) === optBtn.dataset.id);
+        resumeOnce();
+        if (kargo) await resolveEtiketTeslim(kargo, token, statusEl);
+      })
+    );
+    // Modal vazgeçilerek/arka plana tıklanarak kapatılırsa da tarama devam etsin.
+    document.querySelectorAll("#modal-host [data-close-modal]").forEach((closeBtn) => closeBtn.addEventListener("click", resumeOnce));
+    document.getElementById("modal-backdrop")?.addEventListener("click", resumeOnce);
   }
 
   async function loadExitHistory(token, selectedDate) {
@@ -1050,7 +1140,7 @@ const Depo = (() => {
 
       ${App.renderKargoFilterBar()}
 
-      <div id="kargo-list-tumu" class="kargo-grid">${App.skeletonCards(4)}</div>
+      <div id="kargo-list-tumu" class="kargo-rows">${App.skeletonCards(4)}</div>
     `);
 
     document.getElementById("refresh-tumu-btn").addEventListener("click", renderAllKargolarView);
@@ -1084,8 +1174,8 @@ const Depo = (() => {
       host.innerHTML = App.emptyState("bx-search-alt", "Sonuç bulunamadı", "Filtrelere uyan kargo bulunamadı.");
       return;
     }
-    host.innerHTML = list.map((k) => App.kargoCard(k, { showEkleyen: true, showActions: false })).join("");
-    App.bindKargoCardEvents(host);
+    host.innerHTML = list.map((k) => App.kargoRow(k, { showEkleyen: true, showActions: false })).join("");
+    App.bindKargoRowEvents(host, list, { showEkleyen: true, showActions: false });
   }
 
   return { mount };

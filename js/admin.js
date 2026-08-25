@@ -276,7 +276,7 @@ const Admin = (() => {
 
       ${App.renderKargoFilterBar()}
 
-      <div id="kargo-list" class="kargo-grid">${App.skeletonCards(4)}</div>
+      <div id="kargo-list" class="kargo-rows">${App.skeletonCards(4)}</div>
     `);
 
     document.getElementById("refresh-kargolar-btn").addEventListener("click", renderKargolarView);
@@ -311,8 +311,8 @@ const Admin = (() => {
       host.innerHTML = App.emptyState("bx-search-alt", "Sonuç bulunamadı", "Filtrelere uyan kargo bulunamadı.");
       return;
     }
-    host.innerHTML = list.map((k) => App.kargoCard(k, { showEkleyen: true, showActions: true })).join("");
-    App.bindKargoCardEvents(host, { onDeliver: markDelivered, onDelete: deleteKargo });
+    host.innerHTML = list.map((k) => App.kargoRow(k, { showEkleyen: true, showActions: true })).join("");
+    App.bindKargoRowEvents(host, list, { showEkleyen: true, showActions: true, onDeliver: markDelivered, onDelete: deleteKargo });
   }
 
   async function markDelivered(id) {
