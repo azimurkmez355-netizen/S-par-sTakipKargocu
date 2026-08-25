@@ -16,9 +16,9 @@ const Depo = (() => {
   const QR_REPEAT_COOLDOWN_MS = 4000;
 
   const FIRMALAR = [
-    { key: "HepsiJET", label: "HepsiJET", icon: "bx-package", color: "#8B5CF6" },
-    { key: "ArasKargo", label: "Aras Kargo", icon: "bx-car", color: "#FF9F1C" },
-    { key: "PTTKargo", label: "PTT Kargo", icon: "bx-envelope", color: "#F5384F" }
+    { key: "HepsiJET", label: "HepsiJET", icon: "bx-package", color: "#8B5CF6", logo: "assets/kargo-logos/hepsijet.png" },
+    { key: "ArasKargo", label: "Aras Kargo", icon: "bx-car", color: "#003399", logo: "assets/kargo-logos/aras-kargo.png" },
+    { key: "PTTKargo", label: "PTT Kargo", icon: "bx-envelope", color: "#F5384F", logo: "assets/kargo-logos/ptt-kargo.png" }
   ];
 
   function navItems() {
@@ -121,8 +121,6 @@ const Depo = (() => {
         </div>
       </div>
 
-      <div id="my-stats" class="mini-stat-row">${App.skeletonCards(4)}</div>
-
       <form id="kargo-form" class="card form-card">
         <div class="form-section">
           <label class="form-label" for="alici-adsoyad"><i class='bx bx-user'></i> Alıcı Ad Soyad</label>
@@ -132,17 +130,11 @@ const Depo = (() => {
         <div class="form-section">
           <div class="form-label-row">
             <label class="form-label"><i class='bx bx-cube'></i> Kargo İçeriği (Ürünler)</label>
-            <div class="form-label-row__actions">
-              <button type="button" id="add-invoice-btn" class="btn btn--ghost btn--sm">
-                <i class='bx bx-receipt'></i> Faturadan Ekle
-              </button>
-              <button type="button" id="add-product-btn" class="btn btn--ghost btn--sm">
-                <i class='bx bx-plus'></i> Ürün Ekle
-              </button>
-            </div>
+            <button type="button" id="add-product-btn" class="btn btn--ghost btn--sm">
+              <i class='bx bx-plus'></i> Ürün Ekle
+            </button>
           </div>
           <div id="product-rows" class="product-rows"></div>
-          <input type="file" id="invoice-input" accept="image/*" capture="environment" hidden />
         </div>
 
         <div class="form-section">
@@ -151,8 +143,11 @@ const Depo = (() => {
             ${FIRMALAR.map(
               (f) => `
               <button type="button" class="firma-card" data-firma="${f.key}" style="--firma-color:${f.color}">
-                <i class='bx ${f.icon}'></i>
-                <span>${f.label}</span>
+                <span class="firma-card__logo">
+                  <img src="${f.logo}" alt="${f.label}" onerror="this.parentElement.classList.add('firma-card__logo--fallback');this.remove();" />
+                  <i class='bx ${f.icon}'></i>
+                </span>
+                <span class="firma-card__label">${f.label}</span>
               </button>`
             ).join("")}
           </div>
@@ -160,7 +155,10 @@ const Depo = (() => {
 
         <div class="form-section">
           <label class="form-label"><i class='bx bx-qr-scan'></i> Kargo Etiketi (QR)</label>
-          <p class="form-hint">"QR'ı Başlat"a basıp etiketi kareye ortalayın; ışıltılı halka dolunca otomatik onaylanır. Bu QR, kargo çıkışında teslimatı eşleştirmek için kullanılır ve her kargoda zorunludur.</p>
+          <div class="qr-info-banner">
+            <i class='bx bx-info-circle'></i>
+            <p><strong>"QR'ı Başlat"</strong>a basıp etiketi kareye ortalayın — ışıltılı halka dolunca otomatik onaylanır. Bu QR, kargo çıkışında teslimatı eşleştirmek için kullanılır ve her kargoda zorunludur.</p>
+          </div>
           <div class="etiket-uploader">
             ${scannerCameraWrapHtml("etiket")}
             <div id="etiket-status" class="scanner-status"></div>
@@ -198,11 +196,8 @@ const Depo = (() => {
     `;
     const token = App.setContent(html);
     addProductRow();
-    paintMyStats(token, "my-stats");
 
     document.getElementById("add-product-btn").addEventListener("click", () => addProductRow());
-    document.getElementById("add-invoice-btn").addEventListener("click", openInvoiceModal);
-    document.getElementById("invoice-input").addEventListener("change", onInvoiceFileSelected);
     document.getElementById("photo-input").addEventListener("change", onPhotoSelected);
     document.getElementById("etiket-input").addEventListener("change", onEtiketSelected);
     document.getElementById("etiket-start-btn").addEventListener("click", () => startEtiketScan(token));
@@ -227,14 +222,13 @@ const Depo = (() => {
     });
   }
 
-  /** prefill verilirse (fatura OCR'ından) alanlar önceden doldurulmuş
-   *  gelir — kullanıcı yine de kaydetmeden önce düzeltebilir. */
-  function addProductRow(prefill) {
+  function addProductRow() {
     productRowCount += 1;
     const id = `p${productRowCount}-${Date.now()}`;
     const row = document.createElement("div");
     row.className = "product-row";
     row.dataset.rowId = id;
+    row.productPhotos = []; // { name, dataUrl } — bu ürüne özel fotoğraflar
     row.innerHTML = `
       <div class="product-row__head">
         <span class="product-row__index">1</span>
@@ -248,21 +242,20 @@ const Depo = (() => {
           <label>Ürün Adı</label>
           <input type="text" class="input product-name" placeholder="Örn. Kablosuz Kulaklık" required />
         </div>
-        <div class="product-row__field">
-          <label>SKU</label>
-          <input type="text" class="input product-sku" placeholder="Örn. SKU-00123" required />
-        </div>
         <div class="product-row__field product-row__field--adet">
           <label>Adet</label>
           <input type="number" class="input product-adet" min="1" step="1" value="1" required />
         </div>
       </div>
+      <div class="product-row__photos">
+        <div class="product-row__photo-preview"></div>
+        <label class="product-row__photo-add">
+          <i class='bx bx-camera-plus'></i>
+          <span>Ürün Fotoğrafı Ekle</span>
+          <input type="file" class="product-photo-input" accept="image/*" capture="environment" multiple hidden />
+        </label>
+      </div>
     `;
-    if (prefill) {
-      row.querySelector(".product-name").value = prefill.urun_adi || "";
-      row.querySelector(".product-sku").value = prefill.sku || "";
-      row.querySelector(".product-adet").value = prefill.adet && prefill.adet > 0 ? prefill.adet : 1;
-    }
     row.querySelector(".row-remove-btn").addEventListener("click", () => {
       const rows = document.querySelectorAll("#product-rows .product-row");
       if (rows.length <= 1) {
@@ -272,95 +265,45 @@ const Depo = (() => {
       row.remove();
       renumberProductRows();
     });
+    row.querySelector(".product-photo-input").addEventListener("change", (e) => onProductPhotoSelected(e, row));
     document.getElementById("product-rows").appendChild(row);
     renumberProductRows();
   }
 
-  /** Mevcut tüm ürün satırlarını temizler (fatura OCR ile yeniden
-   *  doldurmadan önce, formun varsayılan boş satırının üstüne
-   *  eklemek yerine sıfırdan başlamak için). */
-  function clearProductRows() {
-    document.getElementById("product-rows").innerHTML = "";
-    productRowCount = 0;
-  }
-
-  /* ---------------- Faturadan Ekle (OCR ile otomatik doldurma) ----------------
-     v8.7: Fatura fotoğrafından alıcı adı + ürün satırlarını (kod/ad/adet)
-     çıkarmaya çalışır (js/invoice-ocr.js, Tesseract.js tabanlı). QR/barkod
-     okumanın aksine bu OCR'dır — hata düzeltmesi YOKTUR, yanlış okuma
-     sessizce olabilir. Bu yüzden sonuç HER ZAMAN normal, düzenlenebilir
-     form alanlarına yazılır; kaydetmeden önce görevli gözden geçirmelidir. */
-
-  function openInvoiceModal() {
-    UI.openModal(
-      `
-      <button class="modal-close-x" data-close-modal><i class='bx bx-x'></i></button>
-      <h3 class="modal-title">Ürünleri Nasıl Eklemek İstersiniz?</h3>
-      <p class="modal-text">Faturanın fotoğrafını yükleyin — alıcı adı ve ürünler otomatik doldurulmaya çalışılsın. Okuma hatalı olabilir, kaydetmeden önce mutlaka kontrol edin.</p>
-      <div class="invoice-modal-options">
-        <button type="button" class="invoice-modal-option" id="invoice-auto-btn">
-          <i class='bx bx-receipt'></i>
-          <strong>Faturadan Otomatik Çek</strong>
-          <span>Fatura fotoğrafı yükle, alıcı ve ürünler otomatik dolsun</span>
-        </button>
-        <button type="button" class="invoice-modal-option" data-close-modal>
-          <i class='bx bx-edit-alt'></i>
-          <strong>Elle Gir</strong>
-          <span>Ürünleri kendim tek tek gireceğim</span>
-        </button>
-      </div>
-    `,
-      { size: "modal-box--invoice" }
-    );
-    document.getElementById("invoice-auto-btn").addEventListener("click", () => {
-      UI.closeModal();
-      document.getElementById("invoice-input").click();
-    });
-  }
-
-  async function onInvoiceFileSelected(e) {
-    const file = (e.target.files || [])[0];
+  async function onProductPhotoSelected(e, row) {
+    const files = Array.from(e.target.files || []);
+    for (const file of files) {
+      try {
+        const dataUrl = await downscaleImageFile(file, 1200, 0.75);
+        row.productPhotos.push({ name: file.name, dataUrl });
+        renderProductPhotoPreview(row);
+      } catch {
+        UI.toast(`"${file.name}" yüklenemedi.`, "error");
+      }
+    }
     e.target.value = "";
-    if (!file) return;
+  }
 
-    if (typeof InvoiceOcr === "undefined" || typeof Tesseract === "undefined") {
-      UI.toast("Fatura okuma özelliği yüklenemedi. Ürünleri elle girebilirsiniz.", "error");
-      return;
-    }
-
-    UI.toast("Fatura okunuyor... İlk kullanımda biraz sürebilir.", "info", 6000);
-    UI.setLoading(true);
-    try {
-      const result = await InvoiceOcr.extractFromImageFile(file);
-
-      if (result.aliciAdSoyad) {
-        document.getElementById("alici-adsoyad").value = result.aliciAdSoyad;
-      }
-
-      if (result.urunler.length) {
-        clearProductRows();
-        result.urunler.forEach((p) => addProductRow(p));
-      }
-
-      if (!result.aliciAdSoyad && !result.urunler.length) {
-        UI.toast(
-          "Faturadan bir şey okunamadı. Fotoğrafı net, tam ve iyi ışıkta çekip tekrar deneyin ya da elle girin.",
-          "error"
-        );
-      } else {
-        UI.toast(
-          `Faturadan ${result.aliciAdSoyad ? "alıcı adı" : ""}${result.aliciAdSoyad && result.urunler.length ? " ve " : ""}${
-            result.urunler.length ? result.urunler.length + " ürün" : ""
-          } dolduruldu — lütfen KONTROL EDİN.`,
-          "success",
-          6000
-        );
-      }
-    } catch (err) {
-      UI.toast(err.message || "Fatura okunamadı. Ürünleri elle girebilirsiniz.", "error");
-    } finally {
-      UI.setLoading(false);
-    }
+  function renderProductPhotoPreview(row) {
+    const host = row.querySelector(".product-row__photo-preview");
+    if (!host) return;
+    host.innerHTML = row.productPhotos
+      .map(
+        (p, idx) => `
+        <div class="photo-thumb">
+          <img src="${p.dataUrl}" alt="${UI.escapeHtml(p.name)}" />
+          <button type="button" class="photo-thumb__remove" data-idx="${idx}" title="Kaldır">
+            <i class='bx bx-x'></i>
+          </button>
+        </div>`
+      )
+      .join("");
+    host.querySelectorAll(".photo-thumb__remove").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        row.productPhotos.splice(Number(btn.dataset.idx), 1);
+        renderProductPhotoPreview(row);
+      })
+    );
   }
 
   /** Telefon kameralarının ham (birkaç MB'lık) fotoğraflarını, DB/liste
@@ -602,10 +545,10 @@ const Depo = (() => {
     const products = rows
       .map((r) => ({
         urun_adi: r.querySelector(".product-name").value.trim(),
-        sku: r.querySelector(".product-sku").value.trim(),
-        adet: Math.max(1, parseInt(r.querySelector(".product-adet").value, 10) || 1)
+        adet: Math.max(1, parseInt(r.querySelector(".product-adet").value, 10) || 1),
+        photos: r.productPhotos || []
       }))
-      .filter((p) => p.urun_adi && p.sku);
+      .filter((p) => p.urun_adi);
 
     if (!alici) {
       UI.toast("Alıcı ad soyad girilmelidir.", "error");
@@ -616,7 +559,7 @@ const Depo = (() => {
       return;
     }
     if (!products.length) {
-      UI.toast("En az bir ürün adı ve SKU girmelisiniz.", "error");
+      UI.toast("En az bir ürün adı girmelisiniz.", "error");
       return;
     }
     if (!etiketState.text) {
@@ -639,16 +582,25 @@ const Depo = (() => {
       });
       const kargo = inserted[0];
 
-      await Api.insert(
+      const insertedProducts = await Api.insert(
         "kargo_urunleri",
-        products.map((p) => ({ kargo_id: kargo.id, urun_adi: p.urun_adi, sku: p.sku, adet: p.adet }))
+        products.map((p) => ({ kargo_id: kargo.id, urun_adi: p.urun_adi, adet: p.adet }))
       );
 
-      if (photoBuffer.length) {
-        await Api.insert(
-          "kargo_fotograflari",
-          photoBuffer.map((p) => ({ kargo_id: kargo.id, foto_base64: p.dataUrl }))
+      // Genel kargo fotoğrafları + her ürünün kendi fotoğrafları aynı tabloya
+      // (kargo_fotograflari) gidiyor; ürün fotoğrafları kargo_urun_id ile o
+      // ürüne bağlanıyor (bkz. NEON_TAM_KURULUM.sql v8.10). insertedProducts,
+      // gönderilen products dizisiyle aynı sırada dönüyor (tek INSERT...VALUES
+      // ifadesi için Postgres bu sırayı koruyor).
+      const photoRows = photoBuffer.map((p) => ({ kargo_id: kargo.id, foto_base64: p.dataUrl }));
+      products.forEach((p, idx) => {
+        const urunId = insertedProducts[idx] && insertedProducts[idx].id;
+        p.photos.forEach((ph) =>
+          photoRows.push({ kargo_id: kargo.id, kargo_urun_id: urunId, foto_base64: ph.dataUrl })
         );
+      });
+      if (photoRows.length) {
+        await Api.insert("kargo_fotograflari", photoRows);
       }
 
       UI.toast("Kargo başarıyla kaydedildi.", "success");

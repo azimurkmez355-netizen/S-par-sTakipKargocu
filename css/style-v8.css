@@ -7,13 +7,6 @@
    style-v5.css'in izlediği desenle yeni bir dosyada tutuluyor.
    ============================================================ */
 
-.form-hint {
-  font-size: 12.5px;
-  color: var(--text-muted);
-  line-height: 1.5;
-  margin-top: -4px;
-}
-
 /* ---- Kargo Etiketi (QR) yükleme — Yeni Kargo Ekle formu ---- */
 
 .etiket-uploader { display: flex; flex-direction: column; gap: 12px; }
@@ -42,8 +35,27 @@
   aspect-ratio: 1 / 1;
   margin: 0 auto 14px;
   border-radius: var(--radius-md);
-  overflow: hidden;
   background: var(--sidebar-bg, #0A0E27);
+}
+
+/* Kare çevresinde yumuşak, dönen, çok renkli bir "aura" — v8.10'da
+   düz teal parıltının yerine geldi. .scanner-camera-wrap artık
+   overflow:hidden DEĞİL (aksi halde bu kutunun dışına taşan halkayı
+   keserdi) — video'nun köşe yuvarlaklığı bunun yerine doğrudan
+   .scanner-video'ya (border-radius:inherit) veriliyor. */
+.scanner-camera-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  border-radius: calc(var(--radius-md) + 8px);
+  background: conic-gradient(from 0deg, var(--primary), var(--accent), var(--pink, #c026d3), var(--cyan, #00b8d9), var(--primary));
+  filter: blur(20px);
+  opacity: 0.55;
+  z-index: -1;
+  animation: scanAuraSpin 7s linear infinite;
+}
+@keyframes scanAuraSpin {
+  to { transform: rotate(360deg); }
 }
 
 .scanner-video {
@@ -51,6 +63,7 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  border-radius: inherit;
 }
 .scanner-video[hidden] { display: none; }
 
@@ -80,11 +93,11 @@
   stroke-dasharray: 100;
   stroke-dashoffset: 100;
   transition: stroke-dashoffset 0.12s linear;
-  animation: scanRingShimmer 1.6s ease-in-out infinite;
+  animation: scanRingShimmer 2.4s ease-in-out infinite;
 }
 @keyframes scanRingShimmer {
-  0%, 100% { filter: drop-shadow(0 0 3px var(--scan-ring-color, #14e0c2)); }
-  50% { filter: drop-shadow(0 0 10px var(--scan-ring-color, #14e0c2)); }
+  0%, 100% { filter: drop-shadow(0 0 4px var(--scan-ring-color, #14e0c2)) hue-rotate(0deg); }
+  50% { filter: drop-shadow(0 0 15px var(--scan-ring-color, #14e0c2)) hue-rotate(35deg); }
 }
 
 /* ---- Ortadaki "QR'ı Başlat" butonu — kamera boştayken/hata sonrası ---- */
@@ -162,45 +175,90 @@
 .kargo-card__teslim-eden i { color: var(--green); font-size: 15px; flex-shrink: 0; }
 .kargo-card__teslim-eden strong { color: var(--text); }
 
-/* ---- "Kargo İçeriği" başlık satırındaki iki buton (Faturadan Ekle / Ürün Ekle) ---- */
-.form-label-row__actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-/* ---- Ürün satırı: v8.7'de "Adet" alanı eklendi (2 sütun → 3 sütun) ----
-   style.css'teki orijinal .product-row__fields kuralı (1fr 1fr) yalnızca
-   Ürün Adı + SKU içindi; adet sayı kutusu SKU kadar geniş olmaya ihtiyaç
-   duymadığından üçüncü sütun daha dar tutuluyor. */
-.product-row__fields { grid-template-columns: 2fr 1fr 0.7fr; }
-
-/* ---- "Faturadan Ekle" — 2 seçenekli modal (otomatik / elle) ---- */
-.modal-box--invoice { max-width: 460px; }
-.invoice-modal-options {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 20px;
-}
-.invoice-modal-option {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 16px 18px;
-  border: 1.5px solid var(--border);
+/* ---- Ürün kartı — modern görünüm (v8.10) ----
+   SKU alanı kaldırıldı; ürün artık ad + adet + (isteğe bağlı) kendi
+   fotoğraflarıyla tanımlanıyor. Temel .product-row/.product-row__head
+   stilleri style.css'te; burada sadece daha "pro" bir görünüm için
+   gölge/degrade/hover katmanı ekleniyor. */
+.product-row {
   border-radius: var(--radius-md);
-  background: var(--surface-alt);
-  text-align: left;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s ease;
+}
+.product-row:hover { box-shadow: var(--shadow-md); }
+.product-row__head {
+  background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.09), rgba(var(--accent-rgb), 0.07));
+}
+.product-row__index {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  box-shadow: 0 3px 8px -2px rgba(var(--primary-rgb), 0.5);
+}
+.product-row__fields { grid-template-columns: 1fr 84px; }
+
+.product-row__photos {
+  padding: 0 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.product-row__photo-preview { display: flex; flex-wrap: wrap; gap: 8px; }
+.product-row__photo-preview:empty { display: none; }
+.product-row__photo-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  padding: 8px 14px;
+  border-radius: 100px;
+  border: 1.5px dashed var(--primary);
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
   transition: all 0.15s ease;
 }
-.invoice-modal-option i { font-size: 22px; color: var(--primary); }
-.invoice-modal-option strong { font-size: 14px; color: var(--text); }
-.invoice-modal-option span { font-size: 12.5px; color: var(--text-muted); line-height: 1.4; }
-.invoice-modal-option:hover { border-color: var(--primary); background: var(--primary-light); }
+.product-row__photo-add:hover { background: #E2E2FD; }
+.product-row__photo-add i { font-size: 15px; }
+
+/* ---- Kargo firması kartı — gerçek marka logosu (v8.10) ----
+   Logo görselleri düz beyaz zeminli; kartın kendi (hafif tonlu) arka
+   planına doğrudan konursa kenarları belli olup sırıtıyor. Bu yüzden
+   logo kendi beyaz "fişi" içine oturtuluyor. Görsel dosyası henüz
+   eklenmediyse/yüklenemezse (onerror, js/depo.js) otomatik olarak
+   eski ikon + marka rengi görünümüne düşülüyor. */
+.firma-card { padding: 14px 10px 16px; gap: 10px; }
+.firma-card__logo {
+  width: 100%;
+  height: 54px;
+  background: #fff;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  box-shadow: inset 0 0 0 1px rgba(15, 20, 55, 0.05);
+}
+.firma-card__logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.firma-card__logo i { display: none; font-size: 22px; }
+.firma-card__logo--fallback { background: transparent; box-shadow: none; }
+.firma-card__logo--fallback i { display: block; }
+
+/* ---- Kargo Etiketi (QR) açıklama şeridi (v8.10) ----
+   Eski düz .form-hint metninin yerine geldi. */
+.qr-info-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-light);
+  border: 1px solid rgba(var(--primary-rgb), 0.18);
+}
+.qr-info-banner i { font-size: 17px; color: var(--primary); flex-shrink: 0; margin-top: 1px; }
+.qr-info-banner p { font-size: 12.5px; color: var(--primary-dark); line-height: 1.55; margin: 0; }
+.qr-info-banner strong { color: var(--text); }
 
 @media (max-width: 640px) {
   .scanner-camera-wrap { max-width: 100%; }
-
-  /* Dar ekranda 3 sütun sıkışır: Ürün Adı tam satırı kaplasın,
-     SKU + Adet altında yan yana kalsın. */
-  .product-row__fields { grid-template-columns: 1fr 1fr; }
-  .product-row__field:first-child { grid-column: 1 / -1; }
 }

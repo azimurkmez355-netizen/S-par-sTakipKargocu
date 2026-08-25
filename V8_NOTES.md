@@ -337,3 +337,78 @@ temizlemek DB durumunu bilmeden riskli olurdu).
 Değişen dosyalar (v8.9): js/api.js (409 + kullanicilar FK hatası için
 özel, anlaşılır mesaj), js/mesajlar.js (sesli alarm için autoplay
 "unlock" — ilk kullanıcı etkileşiminde sesi bir kez hazırlama).
+
+## v8.10 — "Yeni Kargo Ekle" baştan tasarım: OCR kaldırıldı, SKU kaldırıldı, ürün fotoğrafı eklendi
+
+Kullanıcı isteği üzerine fatura-OCR özelliği (v8.7/v8.8) **tamamen
+kaldırıldı** — artık tüm ürün girişi elle yapılıyor. `js/invoice-ocr.js`
+ve `js/vendor/tesseract.min.js` silindi, `index.html`'den script
+etiketleri kaldırıldı. QR/barkod okuma bundan etkilenmedi.
+
+**Ürün satırı**: SKU alanı tamamen kaldırıldı; her ürün artık kendi
+fotoğraf(lar)ını ekleyebiliyor ("Ürün Fotoğrafı Ekle", sınırsız sayıda) —
+ürün artık SKU yerine görsel olarak tanımlanıyor. Fotoğraflar
+`kargo_fotograflari` tablosuna, yeni `kargo_urun_id` kolonuyla o ürüne
+bağlı olarak kaydediliyor (boşsa genel kargo fotoğrafıdır, doluysa
+belirli bir ürüne aittir — aynı tablo, ayrı bir tablo açmaya gerek
+kalmadı). `kargo_urunleri.sku` kolonu **silinmedi, sadece NOT NULL
+kısıtı kaldırıldı** — geçmiş kayıtlardaki SKU verisi korunuyor, form
+artık bu alanı hiç göstermiyor/göndermiyor.
+
+**Canlı veritabanında elle çalıştırılması gereken, veri kaybetmeyen
+migration** (Neon SQL Editor):
+```sql
+ALTER TABLE kargo_urunleri ALTER COLUMN sku DROP NOT NULL;
+ALTER TABLE kargo_fotograflari ADD COLUMN IF NOT EXISTS kargo_urun_id BIGINT REFERENCES kargo_urunleri(id) ON DELETE CASCADE;
+```
+`NEON_TAM_KURULUM.sql` sıfırdan kurulumlar için de güncellendi.
+
+**Sayfa üstündeki 4 istatistik kutusu** ("Toplam Eklediğim" vb.) sadece
+"Yeni Kargo Ekle" ekranından kaldırıldı — "Kargolarım" ekranında aynen
+duruyor (`paintMyStats` fonksiyonu değişmedi, sadece bu sayfadaki
+çağrısı kaldırıldı).
+
+**Kargo firması kartları**: artık gerçek marka logosu gösteriyor
+(`assets/kargo-logos/hepsijet.png`, `aras-kargo.png`, `ptt-kargo.png` —
+bu 3 dosyanın kullanıcı tarafından repoya eklenmesi gerekiyor, henüz
+eklenmedi). Logolar düz beyaz zeminli olduğundan, kartın kendi (hafif
+tonlu) arka planında sırıtmasınlar diye her logo kendi beyaz "fişi"
+içine oturtuluyor. Dosya eksik/yüklenemezse (`onerror`) otomatik olarak
+eski ikon+marka rengi görünümüne düşülüyor — görsel eklenene kadar site
+bozuk görsel ikonu göstermeden çalışmaya devam ediyor.
+
+**QR bölümü**: düz gri açıklama metninin yerine yumuşak indigo renkli
+bir bilgi şeridi geldi. Tarama karesinin etrafındaki ışıltı, düz teal
+"nabız" yerine kare çevresinde yavaşça dönen, çok renkli (primary →
+accent → pembe → camgöbeği) bulanık bir "aura" halkasına + karenin
+kendi halkasında renk kayması yapan (hue-rotate) daha yumuşak bir
+parıltıya dönüştürüldü. Bunun için `.scanner-camera-wrap`'in
+`overflow:hidden`'ı kaldırıldı (aksi halde kutunun dışına taşan aura'yı
+keserdi) — video'nun köşe yuvarlaklığı artık doğrudan kendi üzerinde
+(`border-radius:inherit`).
+
+**Bildirimler (toast) pozisyonu**: `#toast-host` zaten `position:fixed;
+top:20px; right:20px` — sayfa/scroll'dan bağımsız her zaman sağ üstten
+sabit geliyor/gidiyor, kontrol edildi, mevcut haliyle doğru
+çalışıyordu; bu konuda kod değişikliği gerekmedi.
+
+Doğrulama: yerelde gerçek uygulama üzerinden (canlı Neon DB'ye giriş
+yapılarak) test edildi — istatistik kutularının kalktığı, SKU alanının
+hiç olmadığı, ürün fotoğrafı ekleme/kaldırmanın çalıştığı, logo
+dosyaları eksikken otomatik ikon yedeğine düştüğü (başta `loading="lazy"`
+yüzünden bu yedek geç tetikleniyordu, kaldırıldı) doğrulandı. Yukarıdaki
+2 satırlık migration çalıştırılmadan gerçek bir kargo kaydı denenmedi
+(QR zorunluluğu nedeniyle bu ortamda gerçek bir etiket okutulamıyor) —
+migration çalıştırıldıktan sonra kullanıcının kendi cihazında uçtan uca
+denemesi gerekiyor.
+
+---
+Değişen/silinen dosyalar (v8.10):
+  SİLİNDİ: js/invoice-ocr.js, js/vendor/tesseract.min.js
+  DÜZEN : index.html (OCR script etiketleri kaldırıldı), js/depo.js
+          (Yeni Kargo Ekle baştan tasarım, ürün fotoğrafı, SKU kaldırma,
+          logo kartları), js/main.js (kargoCard artık sku yoksa o
+          satırı göstermiyor), css/style-v8.css (aura/parıltı, logo
+          fişi, qr-info-banner, ürün kartı/foto stilleri),
+          NEON_TAM_KURULUM.sql (sku NULL edilebilir, kargo_urun_id
+          eklendi — sıfırdan kurulumlar için)

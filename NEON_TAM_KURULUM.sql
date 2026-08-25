@@ -65,17 +65,19 @@ CREATE TABLE kargo_urunleri (
   id BIGSERIAL PRIMARY KEY,
   kargo_id BIGINT NOT NULL REFERENCES kargolar(id) ON DELETE CASCADE,
   urun_adi TEXT NOT NULL,
-  sku TEXT NOT NULL,
+  sku TEXT, -- v8.10: artık formda gösterilmiyor/istenmiyor, ürün fotoğrafla tanımlanıyor
   adet INTEGER NOT NULL DEFAULT 1
 );
 
 -- ============================================================
--- 4. KARGO FOTOGRAFLARI (genel ürün fotoğrafları; etiket fotoğrafı
---    ayrı olarak kargolar.etiket_foto_base64'te tutulur)
+-- 4. KARGO FOTOGRAFLARI (genel kargo fotoğrafları + ürün bazlı
+--    fotoğraflar; etiket fotoğrafı ayrı olarak
+--    kargolar.etiket_foto_base64'te tutulur)
 -- ============================================================
 CREATE TABLE kargo_fotograflari (
   id BIGSERIAL PRIMARY KEY,
   kargo_id BIGINT NOT NULL REFERENCES kargolar(id) ON DELETE CASCADE,
+  kargo_urun_id BIGINT REFERENCES kargo_urunleri(id) ON DELETE CASCADE, -- v8.10: doluysa belirli bir ürüne ait; boşsa genel kargo fotoğrafı
   foto_base64 TEXT NOT NULL
 );
 
