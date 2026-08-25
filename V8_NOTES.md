@@ -528,3 +528,37 @@ test etmesi gerekiyor.
 Değişen dosyalar (v8.13): js/depo.js (fotoğraflar tek tek insert,
 Kargo Çıkışı update-önce akışı + anında resumeLive + debounce'lu
 geçmiş yenileme).
+
+## v8.14 — Fotoğraf hatası kök nedeni araştırıldı (Neon sorunu DEĞİL) + kasiyer bip sesi
+
+Kullanıcı v8.13'ten sonra fotoğraf yüklemenin YİNE başarısız olduğunu
+bildirdi, "Neon veritabanıyla ilgili olabilir" dedi. Bunu varsaymak
+yerine doğrudan test edildi: canlı Neon Data API'ye curl ile,
+gerçekçi boyutta (~267KB base64) bir fotoğraf satırı POST edildi —
+**başarıyla eklendi (201 Created)**, hemen ardından silindi (temiz test).
+Ayrıca `kargo_fotograflari.kargo_urun_id` kolonunun var olduğu da
+ayrıca doğrulandı. Yani: **veritabanı/şema tamamen sağlam, sorun Neon
+değil** — muhtemelen kullanıcının telefonundan gönderilen büyük
+(taban64) istek gövdesinin mobil ağda zaman zaman kesilmesi/bozulması
+("Empty or invalid json" tam olarak bu iki senaryoyu tarif ediyor: boş
+ya da yarım kalmış/bozuk gövde).
+
+Kesin kanıt olmadan üçüncü kez kör tahmin yapmak yerine, bu ihtimale
+karşı iki savunmacı önlem eklendi:
+- Fotoğraf boyutu küçültüldü: 1200px/%75 kalite → 900px/%60 kalite
+  (hem genel kargo fotoğrafları hem ürün fotoğrafları) — istek gövdesi
+  belirgin şekilde küçülüyor.
+- Her fotoğraf artık en fazla 3 kez deneniyor (ilk + 2 tekrar, aralarda
+  kısa bekleme) — geçici bir ağ kesintisini kendi kendine atlatabilir.
+
+**Kargo Çıkışı'na kasiyer tarzı "bip" sesi eklendi**: her başarılı QR
+okutuşunda (aynı etiket kamerada dururken tekrar tekrar değil, yeni
+her okutuşta) kısa, keskin bir bip çalıyor. Ayrı bir ses dosyası
+gerekmedi — Web Audio API ile anlık üretiliyor (kare dalga, 1500Hz,
+~120ms). Tarayıcıların otomatik oynatma kısıtına takılmaması için ses
+bağlamı (AudioContext) "QR'ı Başlat" butonuna basıldığı anda (gerçek
+kullanıcı jesti) oluşturuluyor/devam ettiriliyor.
+
+---
+Değişen dosyalar (v8.14): js/depo.js (fotoğraf boyutu küçültme + tekrar
+deneme, kasiyer bip sesi).

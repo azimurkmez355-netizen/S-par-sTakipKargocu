@@ -274,7 +274,7 @@ const Depo = (() => {
     const files = Array.from(e.target.files || []);
     for (const file of files) {
       try {
-        const dataUrl = await downscaleImageFile(file, 1200, 0.75);
+        const dataUrl = await downscaleImageFile(file, 900, 0.6);
         row.productPhotos.push({ name: file.name, dataUrl });
         renderProductPhotoPreview(row);
       } catch {
@@ -335,7 +335,7 @@ const Depo = (() => {
     const files = Array.from(e.target.files || []);
     for (const file of files) {
       try {
-        const dataUrl = await downscaleImageFile(file, 1200, 0.75);
+        const dataUrl = await downscaleImageFile(file, 900, 0.6);
         photoBuffer.push({ name: file.name, dataUrl });
         renderPhotoPreview();
       } catch {
@@ -613,14 +613,27 @@ const Depo = (() => {
       // "Empty or invalid json" olarak raporluyor — canlı ortamda görüldü).
       // Tek tek göndermek hem bu riski dağıtıyor hem de bir fotoğraf
       // başarısız olsa bile diğerlerinin kaydedilmesine izin veriyor.
+      // Mobil ağlarda ara sıra tek seferlik bağlantı kesintisi/zaman aşımı
+      // yaşanabiliyor — her fotoğraf için en fazla 3 deneme (ilk + 2 tekrar,
+      // aralarında kısa bekleme) yapılıyor, sadece hepsi başarısız olursa
+      // o fotoğraf "yüklenemedi" sayılıyor.
       let photoFailCount = 0;
       let photoFirstError = null;
       for (const row of photoRows) {
-        try {
-          await Api.insert("kargo_fotograflari", [row]);
-        } catch (photoErr) {
+        let ok = false;
+        let lastErr = null;
+        for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+          try {
+            if (attempt > 0) await new Promise((r) => setTimeout(r, 500 * attempt));
+            await Api.insert("kargo_fotograflari", [row]);
+            ok = true;
+          } catch (photoErr) {
+            lastErr = photoErr;
+          }
+        }
+        if (!ok) {
           photoFailCount += 1;
-          photoFirstError = photoFirstError || photoErr.message || "Bilinmeyen hata";
+          photoFirstError = photoFirstError || (lastErr && lastErr.message) || "Bilinmeyen hata";
         }
       }
 
@@ -778,10 +791,44 @@ const Depo = (() => {
     loadExitHistory(token, new Date());
   }
 
+  /** Kasiyer barkod okuyucusu gibi kısa bir "bip" — Web Audio API ile
+   *  anlık üretiliyor, ayrı bir ses dosyasına gerek yok. AudioContext
+   *  tarayıcıların otomatik oynatma politikası yüzünden gerçek bir
+   *  kullanıcı jestiyle (buton tıklaması) "kilidi açılmadan" ses
+   *  çıkarmayabiliyor — bu yüzden burada değil, "QR'ı Başlat" butonuna
+   *  basıldığı anda (startCameraScan) oluşturuluyor/devam ettiriliyor. */
+  let scanBeepCtx = null;
+  function ensureScanBeepUnlocked() {
+    if (!scanBeepCtx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) scanBeepCtx = new Ctx();
+    }
+    if (scanBeepCtx && scanBeepCtx.state === "suspended") scanBeepCtx.resume().catch(() => {});
+  }
+  function playScanBeep() {
+    if (!scanBeepCtx) return;
+    try {
+      const ctx = scanBeepCtx;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.value = 1500;
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    } catch {
+      /* ses çalışmasa da tarama akışını bozmasın */
+    }
+  }
+
   async function startCameraScan(token) {
     const statusEl = document.getElementById("scanner-status");
     const video = document.getElementById("scanner-video");
     if (!video || !statusEl) return;
+    ensureScanBeepUnlocked();
     showScannerLive("scanner");
     try {
       await QrScanner.startLive(
@@ -845,6 +892,7 @@ const Depo = (() => {
     lastHandledQr = value;
     lastHandledAt = now;
     QrScanner.resumeLive(); // bir sonraki paketi hemen taramaya başla, bu paketin sonucunu bekleme
+    playScanBeep(); // kasiyer barkod okuyucusu gibi — her yeni okutuşta bip
 
     const statusEl = document.getElementById("scanner-status");
     const timestamp = new Date().toISOString();
