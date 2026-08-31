@@ -365,7 +365,18 @@
   font-size: 14px;
 }
 .kargo-row__action-btn:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
-.kargo-row__action-btn--danger:hover { background: var(--red-light); color: var(--red); border-color: var(--red); }
+/* Silme butonu artık sadece hover'da değil, her zaman kırmızı ve
+   komşusu (gizli olsa da yer kaplayan "Teslim Edildi" butonu) ile
+   aynı boyutta değil, biraz daha büyük — kullanıcının isteği. */
+.kargo-row__action-btn--danger {
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
+  color: var(--red);
+  background: var(--red-light);
+  border-color: rgba(245, 56, 79, 0.25);
+}
+.kargo-row__action-btn--danger:hover { background: var(--red); color: #fff; border-color: var(--red); }
 
 /* ============================================================
    v8.17 — Tüm Kargolar: tablo (masaüstü) + kart (mobil)
@@ -414,15 +425,18 @@
 }
 .kargo-bulk-bar__count { font-size: 13px; font-weight: 700; color: var(--primary-dark); margin-right: 4px; }
 
-/* ---- Masaüstü tablo — sağda/solda boşluk bırakmadan tam genişlik.
-   .main-content'in kendi padding'ini (34px 40px masaüstü, 20px 16px
-   mobil) negatif margin ile telafi ediyor, ≤860px'te zaten gizleniyor
-   (yerine .kargo-mcards geliyor) ama tutarlılık için mobil değeri de
-   tanımlı. */
+/* ---- Masaüstü tablo — artık keskin/kare bir ızgara değil, yumuşak
+   köşeli tek bir "kart" (kullanıcının isteği). Full-bleed negatif
+   margin kaldırıldı, sayfanın diğer kartlarıyla (.card) aynı hizada
+   ve aynı köşe yuvarlaklığında oturuyor — table-layout:fixed zaten
+   konteyner ne genişlikte olursa olsun yatay kaydırmayı gerektirmez,
+   o yüzden bu değişiklik kaydırma davranışını etkilemiyor. */
 .kargo-table-wrap {
-  margin: 0 -40px;
-  border-top: 1px solid var(--border);
-  overflow-x: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 /* table-layout:fixed + yüzde genişlikli sütunlar (her .kargo-table__*
    sınıfının width'i aşağıda) — tablo, sağdaki sütunlar için yatay
@@ -433,33 +447,29 @@
   width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
 }
 .kargo-table thead th {
   text-align: center;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-faint);
-  padding: 13px 14px;
+  padding: 15px 14px;
   background: var(--surface-alt);
   position: sticky;
   top: 0;
   z-index: 1;
-  border-bottom: 2px solid var(--border);
-  border-right: 1px solid rgba(15, 20, 55, 0.055);
+  border-bottom: 1.5px solid var(--border);
 }
-.kargo-table thead th:last-child { border-right: none; }
 .kargo-table tbody td {
-  padding: 14px 14px;
+  padding: 16px 14px;
   vertical-align: middle;
   text-align: center;
-  border-bottom: 2px solid var(--border);
-  border-right: 1px solid rgba(15, 20, 55, 0.05);
+  border-bottom: 1px solid var(--border);
   overflow: hidden;
 }
-.kargo-table tbody tr td:last-child { border-right: none; }
 /* Alıcı adı / ürün adı hücreleri uzun metinlerde satır kırsın — sabit
    sütun genişliğiyle (table-layout:fixed) taşma yerine satır kırma
    olsun diye. */
@@ -493,9 +503,6 @@
   gap: 7px;
   max-width: 100%;
 }
-/* Ürün adı hücresi birden fazla ürünü alt alta listeleyebiliyor —
-   ikon en üstteki satırla değil, tüm listenin tepesiyle hizalansın. */
-.kargo-table__cell-flex--top { align-items: flex-start; }
 .kargo-table__cell-flex i {
   font-size: 15px;
   color: var(--text-faint);
@@ -518,17 +525,70 @@
   border-radius: 100px;
   letter-spacing: 0.02em;
 }
-.kargo-table__urun-adi { width: 19%; color: var(--text-muted); }
-.kargo-table__urun-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.kargo-table__urun-list span { overflow-wrap: break-word; }
+.kargo-table__urun-adi { width: 19%; }
+.kargo-table__urun-list { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; }
+/* Birden fazla ürün olduğunda HEPSİ kendi ikonuyla, ayrı bir satır
+   olarak basılıyor (kullanıcının isteği — önceden tek paylaşılan bir
+   ikon vardı). İkon küçük, yuvarlak köşeli bir "rozet" içinde. */
+.kargo-table__urun-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: break-word;
+  text-align: left;
+}
+.kargo-table__urun-item i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 7px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 12px;
+  flex-shrink: 0;
+}
 /* Kargocu ismi kırmızı ve belirgin — kullanıcının özel isteği (color
    inherited property olduğu için td'ye vermek iç span'e de yayılıyor). */
 .kargo-table__kargocu { width: 9%; color: var(--red); font-weight: 700; }
 .kargo-table__kargocu i { color: var(--red); }
 .kargo-table__durum { width: 11%; }
 .kargo-table__adet { width: 5%; font-weight: 700; color: var(--text); }
-.kargo-table__tarih { width: 10%; color: var(--text-muted); font-size: 12px; }
+.kargo-table__tarih { width: 10%; }
 .kargo-table__select-td, .kargo-table__select-th { width: 4%; }
+
+/* ---- Tarih "kutusu" — saat üstte kalın, tarih altta soluk, ayrı bir
+   kart görünümünde (kullanıcının isteği: aynı satırda karışık
+   durmasın). Tabloda hücre içinde ortalanması için inline-flex,
+   .kargo-mcard__grid gibi bir flex-column ebeveyn içindeyken tam
+   genişliğe esnemesin diye align-self: flex-start. ---- */
+.kargo-table__dt {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 11px;
+  border-radius: 10px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  min-width: 62px;
+  align-self: flex-start;
+}
+.kargo-table__dt-time { font-size: 13px; font-weight: 700; color: var(--text); letter-spacing: 0.01em; }
+.kargo-table__dt-date { font-size: 10.5px; font-weight: 600; color: var(--text-faint); letter-spacing: 0.01em; }
+.kargo-table__dt--empty {
+  background: transparent;
+  border-style: dashed;
+  color: var(--text-faint);
+  font-size: 13px;
+  justify-content: center;
+  align-self: flex-start;
+}
 /* İki buton için sabit genişlik — teslim edilmiş satırlarda "Teslim
    Edildi" butonu visibility:hidden ile gizleniyor ama YER KAPLAMAYA
    devam ediyor, böylece yanındaki çöp kutusu satırdan satıra kaymıyor
@@ -536,7 +596,19 @@
    değil içindeki .kargo-table__actions-inner sarmalayıcıya uygulanıyor
    — nedeni yukarıdaki .kargo-table__cell-flex notuyla aynı. */
 .kargo-table__actions { width: 8%; }
-.kargo-table__actions-inner { display: inline-flex; align-items: center; gap: 6px; }
+/* İki buton eşit genişlikte kendi "kutusuna" (grid hücresine) sahip —
+   silme butonu, gizli-ama-yer-kaplayan teslim butonunun yanında değil,
+   KENDİ hücresinin ortasında tam ortalanıyor (kullanıcının bildirdiği
+   hizalama sorunu — eskiden inline-flex+gap ile ikisi tek blok olarak
+   ortalanıyordu, bu da silme ikonunu gerçek merkezden kaydırıyordu). */
+.kargo-table__actions-inner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  justify-items: center;
+  gap: 6px;
+  width: 100%;
+}
 .kargo-table__expand-td { width: 4%; }
 .kargo-table__expand-btn {
   width: 28px;
@@ -553,25 +625,81 @@
 }
 .kargo-table__expand-btn:hover { background: var(--primary-light); color: var(--primary); }
 .kargo-table__expand-btn.is-open { transform: rotate(180deg); color: var(--primary); }
-.kargo-table__detail-row td { padding: 0; border-bottom: 2px solid var(--border); background: var(--surface-alt); }
+.kargo-table__detail-row td { padding: 0; border-bottom: 1px solid var(--border); background: var(--surface-alt); }
 
 /* ---- Satır/kart genişleyince açılan detay içeriği (ürünler, etiket/
    fotoğraflar, teslim bilgisi) — hem masaüstü tablo hem mobil kartta
-   ortak kullanılıyor. ---- */
+   ortak kullanılıyor. align-items:start: iki kolon eşit boyda değilse
+   birbirine göre gerilmesin, her biri kendi içeriği kadar yer alsın. */
 .kargo-detail {
-  padding: 18px 20px;
+  padding: 20px 22px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  align-items: start;
+  gap: 22px 24px;
   white-space: normal;
 }
+/* Referans no / kargo firması / paketleyen — kullanıcının istediği
+   "daha çok detay", zaten elde olan veriden üretiliyor, yeni bir
+   sorgu gerektirmiyor. İki kolonun ÜSTÜNDE tam genişlik kaplıyor. */
+.kargo-detail__meta {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.kargo-detail__meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.kargo-detail__meta-chip i { color: var(--primary); font-size: 13px; }
 .kargo-detail__col h4 {
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-faint);
-  margin: 0 0 10px;
+  margin: 0 0 12px;
+}
+.kargo-detail__col h4 i { font-size: 13px; color: var(--primary); }
+/* .urun-chip'in varsayılan arka planı (--surface-alt) burada detay
+   panelinin KENDİ arka planıyla (o da --surface-alt) aynı — bu yüzden
+   kartlar görünmez, düz metin gibi duruyordu. Burada beyaz zemin +
+   ince kenarlıkla gerçek bir "kart" olarak ayrıştırılıyor. */
+.kargo-detail .urun-chip { background: var(--surface); border: 1px solid var(--border); font-size: 13px; }
+.urun-chip__name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.urun-chip__name i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.urun-chip__adet {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  padding: 2px 9px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 .kargo-detail__media { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
 .kargo-detail__thumb {
@@ -622,7 +750,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text);
 }
 .kargo-mcard__alici i { font-size: 15px; color: var(--text-faint); flex-shrink: 0; }
@@ -633,22 +761,24 @@
 .kargo-mcard__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px 14px;
+  gap: 10px 14px;
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px dashed var(--border);
 }
-.kargo-mcard__grid > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.kargo-mcard__grid span { font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-faint); display: flex; align-items: center; gap: 3px; }
+.kargo-mcard__grid > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.kargo-mcard__grid span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-faint); display: flex; align-items: center; gap: 3px; }
 .kargo-mcard__grid span i { font-size: 11px; }
 .kargo-mcard__grid strong {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.kargo-mcard__urun-list { display: flex; flex-direction: column; gap: 5px; }
+.kargo-mcard__urun-list .kargo-table__urun-item { white-space: normal; }
 .kargo-mcard__actions { display: flex; gap: 8px; margin-top: 12px; }
 .kargo-mcard__expand-btn {
   width: 100%;

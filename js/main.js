@@ -212,6 +212,17 @@ const App = (() => {
     return `KRG-${String(id).padStart(6, "0")}`;
   }
 
+  /** Tarih hücrelerinde saat/tarih aynı satırda karışık durduğu için
+   *  (v8.20 sonrası kullanıcı geri bildirimi) artık saat ÜSTTE kalın,
+   *  tarih ALTTA soluk, ayrı bir "kutu" içinde basılıyor. */
+  function dateTimeChipHtml(iso) {
+    if (!iso) return `<span class="kargo-table__dt kargo-table__dt--empty">—</span>`;
+    const d = new Date(iso);
+    const time = d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+    const date = d.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return `<span class="kargo-table__dt"><span class="kargo-table__dt-time">${time}</span><span class="kargo-table__dt-date">${date}</span></span>`;
+  }
+
   /* ---------------- Avatar üreteci (modern silüet) ---------------- */
   /* İnternet bağlantısı gerektirmeyen, isimden türetilmiş, her
      kullanıcı için farklı ama kalıcı (deterministic) modern insan
@@ -461,10 +472,17 @@ const App = (() => {
   function kargoDetailContent(kargo, opts) {
     const urunler = kargo.kargo_urunleri || [];
     const fotolar = kargo.kargo_fotograflari || [];
+    const firma = FIRMA_META[kargo.kargo_firmasi] || { icon: "bx-package" };
+    const ekleyenAdi = kargo.kullanicilar?.ad_soyad;
     return `
       <div class="kargo-detail">
+        <div class="kargo-detail__meta">
+          <span class="kargo-detail__meta-chip"><i class='bx bx-hash'></i>${refNo(kargo.id)}</span>
+          <span class="kargo-detail__meta-chip"><i class='bx ${firma.icon}'></i>${UI.escapeHtml(kargo.kargo_firmasi || "-")}</span>
+          ${ekleyenAdi ? `<span class="kargo-detail__meta-chip"><i class='bx bx-id-card'></i>${UI.escapeHtml(ekleyenAdi)}</span>` : ""}
+        </div>
         <div class="kargo-detail__col">
-          <h4>Ürünler</h4>
+          <h4><i class='bx bx-cube-alt'></i> Ürünler</h4>
           <div class="kargo-card__urunler">
             ${
               urunler.length
@@ -472,7 +490,8 @@ const App = (() => {
                     .map(
                       (u) => `
               <div class="urun-chip">
-                <span class="urun-chip__ad">${u.adet && u.adet !== 1 ? `<strong>${u.adet}x</strong> ` : ""}${UI.escapeHtml(u.urun_adi)}</span>
+                <span class="urun-chip__name"><i class='bx bx-cube-alt'></i><span class="urun-chip__ad">${UI.escapeHtml(u.urun_adi)}</span></span>
+                ${u.adet && u.adet !== 1 ? `<span class="urun-chip__adet">${u.adet}x</span>` : ""}
               </div>`
                     )
                     .join("")
@@ -481,7 +500,7 @@ const App = (() => {
           </div>
         </div>
         <div class="kargo-detail__col">
-          <h4>Etiket ve Fotoğraflar</h4>
+          <h4><i class='bx bx-image-alt'></i> Etiket ve Fotoğraflar</h4>
           <div class="kargo-detail__media">
             ${
               kargo.etiket_foto_base64
@@ -520,6 +539,13 @@ const App = (() => {
     if (!urunler.length) return { adList: ["-"], adet: 0 };
     const adList = urunler.map((u) => (u.adet && u.adet !== 1 ? `${u.adet}x ${u.urun_adi}` : u.urun_adi));
     return { adList, adet };
+  }
+
+  /** Birden fazla ürün olduğunda HER satırın kendi ikonu olsun istendi —
+   *  önceden tek bir ikon listenin tepesine konuyordu. Artık her ürün
+   *  kendi küçük ikon rozetiyle basılıyor. */
+  function urunListItemsHtml(adList) {
+    return adList.map((n) => `<span class="kargo-table__urun-item"><i class='bx bx-cube-alt'></i>${UI.escapeHtml(n)}</span>`).join("");
   }
 
   function tableColCount(opts) {
@@ -565,14 +591,12 @@ const App = (() => {
         ${opts.selectMode ? `<td class="kargo-table__select-td"><input type="checkbox" class="kargo-row-check" data-id="${kargo.id}" /></td>` : ""}
         <td class="kargo-table__logo">${firmaLogoHtml(kargo.kargo_firmasi)}</td>
         <td class="kargo-table__alici"><span class="kargo-table__cell-flex"><i class='bx bx-user'></i>${UI.escapeHtml(kargo.alici_ad_soyad)}</span>${etiketNote}</td>
-        <td class="kargo-table__urun-adi"><span class="kargo-table__cell-flex kargo-table__cell-flex--top"><i class='bx bx-cube'></i><span class="kargo-table__urun-list">${adList
-          .map((n) => `<span>${UI.escapeHtml(n)}</span>`)
-          .join("")}</span></span></td>
+        <td class="kargo-table__urun-adi"><span class="kargo-table__urun-list">${urunListItemsHtml(adList)}</span></td>
         <td class="kargo-table__adet">${adet}</td>
         ${opts.showEkleyen ? `<td class="kargo-table__kargocu"><span class="kargo-table__cell-flex"><i class='bx bx-id-card'></i>${UI.escapeHtml(kargo.kullanicilar?.ad_soyad || "-")}</span></td>` : ""}
         <td class="kargo-table__durum">${durumBadge(kargo.durum)}</td>
-        <td class="kargo-table__tarih">${UI.formatDateTime(kargo.olusturma_tarihi)}</td>
-        <td class="kargo-table__tarih">${kargo.cikis_tarihi ? UI.formatDateTime(kargo.cikis_tarihi) : "—"}</td>
+        <td class="kargo-table__tarih">${dateTimeChipHtml(kargo.olusturma_tarihi)}</td>
+        <td class="kargo-table__tarih">${dateTimeChipHtml(kargo.cikis_tarihi)}</td>
         ${opts.showActions ? `<td class="kargo-table__actions"><span class="kargo-table__actions-inner">${kargoActionsHtml(kargo, "row")}</span></td>` : ""}
         <td class="kargo-table__expand-td">
           <button type="button" class="kargo-table__expand-btn js-row-expand" data-target="${detailId}" aria-label="Detay"><i class='bx bx-chevron-down'></i></button>
@@ -598,11 +622,11 @@ const App = (() => {
         </div>
         ${etiketNote ? `<div class="kargo-mcard__etiket-no">${etiketNote}</div>` : ""}
         <div class="kargo-mcard__grid">
-          <div><span><i class='bx bx-cube'></i> Ürün</span><strong>${adList.map((n) => UI.escapeHtml(n)).join("<br>")}</strong></div>
+          <div><span><i class='bx bx-cube'></i> Ürün</span><div class="kargo-mcard__urun-list">${urunListItemsHtml(adList)}</div></div>
           <div><span>Adet</span><strong>${adet}</strong></div>
           ${opts.showEkleyen ? `<div><span><i class='bx bx-id-card'></i> Kargocu</span><strong class="kargo-mcard__kargocu">${UI.escapeHtml(kargo.kullanicilar?.ad_soyad || "-")}</strong></div>` : ""}
-          <div><span>Paketlenme</span><strong>${UI.formatDateTime(kargo.olusturma_tarihi)}</strong></div>
-          <div><span>Teslim</span><strong>${kargo.cikis_tarihi ? UI.formatDateTime(kargo.cikis_tarihi) : "—"}</strong></div>
+          <div><span>Paketlenme</span>${dateTimeChipHtml(kargo.olusturma_tarihi)}</div>
+          <div><span>Teslim</span>${dateTimeChipHtml(kargo.cikis_tarihi)}</div>
         </div>
         ${opts.showActions ? `<div class="kargo-mcard__actions">${kargoActionsHtml(kargo, "mcard")}</div>` : ""}
         <button type="button" class="kargo-mcard__expand-btn js-row-expand" data-target="${detailId}">

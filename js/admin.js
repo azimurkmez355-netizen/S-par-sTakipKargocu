@@ -87,11 +87,8 @@ const Admin = (() => {
         </div>
       </div>
 
-      <div class="section-heading"><i class='bx bx-time-five'></i> Son Hareketler</div>
-      <div class="card analytics-card">
-        <h3><i class='bx bx-time-five'></i> Son Eklenen Kargolar</h3>
-        <div id="son-kargolar" class="kargo-grid">${App.skeletonCards(3)}</div>
-      </div>
+      <div class="section-heading"><i class='bx bx-time-five'></i> Son Eklenen Kargolar</div>
+      <div id="son-kargolar">${App.skeletonCards(3)}</div>
     `);
 
     try {
@@ -126,12 +123,12 @@ const Admin = (() => {
 
       const son = kargolar.slice(0, 3);
       const sonHtml = son.length
-        ? son.map((k) => App.kargoCard(k, { showEkleyen: true, showActions: true })).join("")
+        ? App.kargoTableHtml(son, { showEkleyen: true, showActions: true })
         : App.emptyState("bx-package", "Henüz kargo yok", "Depo görevlileri kargo ekledikçe burada görünecek.");
       App.paint(token, "son-kargolar", sonHtml);
       const sonHost = document.getElementById("son-kargolar");
       if (App.isCurrent(token) && sonHost) {
-        App.bindKargoCardEvents(sonHost, { onDeliver: markDelivered, onDelete: deleteKargo });
+        App.bindKargoTableEvents(sonHost, son, { showEkleyen: true, showActions: true, onDeliver: markDelivered, onDelete: deleteKargo });
       }
     } catch (err) {
       if (App.isCurrent(token)) UI.toast(err.message || "Veriler yüklenemedi.", "error");
