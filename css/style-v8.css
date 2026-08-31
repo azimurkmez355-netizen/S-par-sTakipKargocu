@@ -462,20 +462,27 @@
   top: 0;
   z-index: 1;
   border-bottom: 2px solid rgba(15, 20, 55, 0.13);
+  border-right: 1px solid rgba(15, 20, 55, 0.07);
 }
-/* Satır ayırıcı çizgi — kullanıcı satırların "kendi bölümüne" ayrılmış
-   gibi net görünmesini istedi (v8.21'in çok soluk 1px'i yetersiz
-   kaldı). var(--border) tek başına çok açık renkte olduğu için, dikey
-   çizgilerde kullanılmayan koyu rgba tonu burada satır ayırıcı için
-   kullanılıyor — dikey çizgi YOK, sadece bu yatay ayırıcı var, o
-   yüzden "ızgara" hissi geri gelmiyor. */
+.kargo-table thead th:last-child { border-right: none; }
+/* Satır ayırıcı çizgi (yatay) — kullanıcı satırların "kendi bölümüne"
+   ayrılmış gibi net görünmesini istedi (v8.21'in çok soluk 1px'i
+   yetersiz kaldı). Sütun ayırıcı (dikey) geri istendi ama v8.20
+   öncesindeki kalın/keskin "ızgara" hissi DEĞİL — daha ince/soluk bir
+   ton (0.07), yatay çizgiden (0.09) bilinçli olarak daha zayıf: satır
+   ayrımı BİRİNCİL, sütun ayrımı ikincil/daha yumuşak bir rehber.
+   table-layout:fixed + yüzdelik sütun genişlikleri sayesinde dikey
+   çizgiler her satırda TAM AYNI x-konumunda oturuyor (satırdan satıra
+   kaymıyor). */
 .kargo-table tbody td {
   padding: 16px 14px;
   vertical-align: middle;
   text-align: center;
   border-bottom: 2px solid rgba(15, 20, 55, 0.09);
+  border-right: 1px solid rgba(15, 20, 55, 0.07);
   overflow: hidden;
 }
+.kargo-table tbody tr td:last-child { border-right: none; }
 /* Alıcı adı / ürün adı hücreleri uzun metinlerde satır kırsın — sabit
    sütun genişliğiyle (table-layout:fixed) taşma yerine satır kırma
    olsun diye. */
