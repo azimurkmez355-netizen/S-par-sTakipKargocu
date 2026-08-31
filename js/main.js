@@ -588,7 +588,7 @@ const App = (() => {
     const delivered = kargo.durum === "Teslim Edildi";
     return `
       <tr class="kargo-table__row${delivered ? " kargo-table__row--delivered" : ""}" data-kargo-id="${kargo.id}">
-        ${opts.selectMode ? `<td class="kargo-table__select-td"><input type="checkbox" class="kargo-row-check" data-id="${kargo.id}" /></td>` : ""}
+        ${opts.selectMode ? `<td class="kargo-table__select-td"><input type="checkbox" class="kargo-row-check" data-id="${kargo.id}" ${opts.selectedIds?.has(String(kargo.id)) ? "checked" : ""} /></td>` : ""}
         <td class="kargo-table__logo">${firmaLogoHtml(kargo.kargo_firmasi)}</td>
         <td class="kargo-table__alici"><span class="kargo-table__cell-flex"><i class='bx bx-user'></i>${UI.escapeHtml(kargo.alici_ad_soyad)}</span>${etiketNote}</td>
         <td class="kargo-table__urun-adi"><span class="kargo-table__urun-list">${urunListItemsHtml(adList)}</span></td>
@@ -615,7 +615,7 @@ const App = (() => {
     return `
       <div class="kargo-mcard${delivered ? " kargo-mcard--delivered" : ""}" data-kargo-id="${kargo.id}">
         <div class="kargo-mcard__head">
-          ${opts.selectMode ? `<input type="checkbox" class="kargo-row-check" data-id="${kargo.id}" />` : ""}
+          ${opts.selectMode ? `<input type="checkbox" class="kargo-row-check" data-id="${kargo.id}" ${opts.selectedIds?.has(String(kargo.id)) ? "checked" : ""} />` : ""}
           ${firmaLogoHtml(kargo.kargo_firmasi)}
           <span class="kargo-mcard__alici"><i class='bx bx-user'></i>${UI.escapeHtml(kargo.alici_ad_soyad)}</span>
           ${durumBadge(kargo.durum)}

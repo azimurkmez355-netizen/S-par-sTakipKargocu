@@ -321,7 +321,8 @@ const Admin = (() => {
       host.innerHTML = App.emptyState("bx-search-alt", "Sonuç bulunamadı", "Filtrelere uyan kargo bulunamadı.");
       return;
     }
-    host.innerHTML = App.kargoTableHtml(list, { showEkleyen: true, showActions: true, selectMode });
+    const selectedIdSet = new Set(selectedIds.map(String));
+    host.innerHTML = App.kargoTableHtml(list, { showEkleyen: true, showActions: true, selectMode, selectedIds: selectedIdSet });
     App.bindKargoTableEvents(host, list, {
       showEkleyen: true,
       showActions: true,
