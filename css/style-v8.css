@@ -461,13 +461,19 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  border-bottom: 1.5px solid var(--border);
+  border-bottom: 2px solid rgba(15, 20, 55, 0.13);
 }
+/* Satır ayırıcı çizgi — kullanıcı satırların "kendi bölümüne" ayrılmış
+   gibi net görünmesini istedi (v8.21'in çok soluk 1px'i yetersiz
+   kaldı). var(--border) tek başına çok açık renkte olduğu için, dikey
+   çizgilerde kullanılmayan koyu rgba tonu burada satır ayırıcı için
+   kullanılıyor — dikey çizgi YOK, sadece bu yatay ayırıcı var, o
+   yüzden "ızgara" hissi geri gelmiyor. */
 .kargo-table tbody td {
   padding: 16px 14px;
   vertical-align: middle;
   text-align: center;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid rgba(15, 20, 55, 0.09);
   overflow: hidden;
 }
 /* Alıcı adı / ürün adı hücreleri uzun metinlerde satır kırsın — sabit
@@ -625,7 +631,7 @@
 }
 .kargo-table__expand-btn:hover { background: var(--primary-light); color: var(--primary); }
 .kargo-table__expand-btn.is-open { transform: rotate(180deg); color: var(--primary); }
-.kargo-table__detail-row td { padding: 0; border-bottom: 1px solid var(--border); background: var(--surface-alt); }
+.kargo-table__detail-row td { padding: 0; border-bottom: 2px solid rgba(15, 20, 55, 0.09); background: var(--surface-alt); }
 
 /* ---- Satır/kart genişleyince açılan detay içeriği (ürünler, etiket/
    fotoğraflar, teslim bilgisi) — hem masaüstü tablo hem mobil kartta
