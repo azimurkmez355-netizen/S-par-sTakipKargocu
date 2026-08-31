@@ -1002,3 +1002,102 @@ Değişen dosyalar (v8.20):
           adText→adList, kargoTableRowPairHtml/kargoMobileCardHtml/
           kargoTableHtml thead — tüm hücrelere sütun class'ı, etiket
           rozeti class adı düzeltmesi + <br> ile ayrı satır)
+
+## v8.21 — Tüm Kargolar: modern kart görünümü + Genel Bakış'ta aynı tablo
+
+Kullanıcı ekran görüntüsüyle birlikte tabloyu "keskin/kare" bulup
+yumuşak köşeli, daha modern bir görünüm istedi; ayrıca birkaç somut
+detay: fontlar bir tık büyüsün, birden fazla ürün olduğunda hepsinin
+kendi ikonu olsun, tarih hücrelerinde saat/tarih aynı satırda karışık
+durmasın, silme butonu her zaman kırmızı+biraz daha büyük+kendi
+kutusunda tam ortalı olsun, detay görünümü daha "dolu"/düzenli olsun.
+Ayrıca admin "Genel Bakış" ekranındaki "Son Eklenen Kargolar" artık
+Tüm Kargolar ile **birebir aynı** tablo bileşenini kullanıyor (eskiden
+ayrı bir kart-grid şablonu vardı).
+
+**Tablo artık bir "kart"**: `.kargo-table-wrap`'teki full-bleed negatif
+margin (`-40px`) kaldırıldı, yerine sayfanın diğer `.card` bileşenleriyle
+aynı `border-radius:var(--radius-lg)` + `border` + `box-shadow` verildi.
+Hücreler arasındaki dikey `border-right` çizgileri (Excel-ızgara hissi
+veren asıl unsur) tamamen kaldırıldı, sadece yatay satır ayırıcılar
+kaldı (2px→1px, daha soft). `table-layout:fixed` zaten konteyner ne
+genişlikte olursa olsun yatay kaydırmayı gerektirmediği için bu
+değişiklik v8.20'nin "kaydırma yok" kazanımını bozmadı. Fontlar
+büyütüldü (gövde 13→14px, başlık 10.5→11px).
+
+**Ürün adı — her satır kendi ikonuyla**: eskiden birden fazla ürün alt
+alta listelenirken tek bir paylaşılan ikon en tepede duruyordu. Artık
+her ürün kendi küçük ikon "rozetiyle" (`kargo-table__urun-item`, mavi
+tonlu kare arka planlı ikon) ayrı bir satır — hem tablo hücresinde hem
+mobil kartta hem de detay panelindeki `.urun-chip`'lerde tutarlı.
+
+**Tarih "kutusu"**: `dateTimeChipHtml()` yeni bir yardımcı fonksiyon —
+saat kalın/üstte, tarih soluk/altta, ayrı bir yuvarlak köşeli kutu
+içinde basılıyor (`kargo-table__dt`). Hem masaüstü tablo hem mobil
+kartta kullanılıyor, boş tarihlerde kesikli çizgili boş bir kutu
+gösteriyor.
+
+**Silme butonu**: `.kargo-row__action-btn--danger` artık sadece
+hover'da değil HER ZAMAN kırmızı (`var(--red-light)` zemin + `var(--red)`
+ikon), 28px→34px büyüdü. Asıl kök neden düzeltmesi: `.kargo-table__
+actions-inner` eskiden `inline-flex`+`gap` ile iki butonu (gizli-ama-
+yer-kaplayan "Teslim Edildi" + silme) TEK BLOK olarak hücrede
+ortalıyordu — bu da silme ikonunu gerçek merkezden kaydırıyordu
+(kullanıcının fark ettiği hizalama sorunu). Artık `display:grid;
+grid-template-columns:1fr 1fr` ile her buton KENDİ hücresinde
+ortalanıyor, teslim butonu görünür/gizli olsa da silme butonunun
+konumu değişmiyor.
+
+**Detay görünümü**: üç şey birden düzeltildi/eklendi. (1) Yeni bir üst
+"meta" satırı — referans no (`KRG-000123`), kargo firması, paketleyen
+adı — zaten elde olan veriden, yeni bir sorgu gerektirmeden üretiliyor
+("daha çok detay" isteği). (2) "Ürünler"/"Etiket ve Fotoğraflar"
+başlıklarına ikon eklendi. (3) **Kök nedenli gerçek bir bug bulundu**:
+`.urun-chip`'in varsayılan arka planı (`var(--surface-alt)`) detay
+panelinin KENDİ arka planıyla (o da `var(--surface-alt)`) tam aynıydı
+— bu yüzden ürün kartları hiç görünmüyordu, düz metin gibi (büyük
+boşluklarla) duruyordu. `kargoCard()`'ın (Kargolarım ekranı) beyaz
+zeminli bağlamında bu hiç sorun değildi, ama `kargoDetailContent()`
+farklı bir arka plan üzerinde aynı sınıfı miras alıyordu. Düzeltme:
+`.kargo-detail .urun-chip` için beyaz zemin + ince kenarlık — artık
+gerçek, görünür bir kart. Adet bilgisi de artık satırın sonunda ayrı
+bir rozet (`urun-chip__adet`, "4x").
+
+**Genel Bakış = Tüm Kargolar**: `admin.js`'teki `renderOzetView()`
+artık "Son Eklenen Kargolar" için `App.kargoCard`+`.kargo-grid` yerine
+`App.kargoTableHtml`+`App.bindKargoTableEvents` çağırıyor — tıpkı Tüm
+Kargolar'ın kendi `paintKargoList()`'inin yaptığı gibi (aynı opts:
+`showEkleyen:true, showActions:true`). Dıştaki çift başlık sarmalayıcısı
+(`.card.analytics-card` içinde ikinci bir `<h3>`) da kaldırıldı — Tüm
+Kargolar'da tablo hiçbir kart içine sarılmadan tek bir `.section-heading`
+altında durduğu için, gerçek "birebir aynı" görünüm için burası da
+sadeleştirildi. Kayıt sayısı hâlâ en son 3 kargoyla sınırlı (widget'ın
+asıl amacı kısa bir önizleme, Tüm Kargolar'ın tam listesini tekrarlamak
+değil) — değişen sadece HANGİ bileşenle render edildiği.
+
+**Doğrulama**: Bu tur Browser paneli gerçekten görüntülendi ve ekran
+görüntüsü alınabildi (önceki birkaç turun aksine) — admin panelinde
+canlı 9 kargoluk veri üzerinde hem masaüstü hem 375px mobil görünüm
+gözle ve `getComputedStyle` ile doğrulandı: `.kargo-table-wrap`
+border-radius 22px, `.urun-chip` arka planı artık beyaz (detay panelinin
+grisinden farklı), silme butonu 34×34 + kırmızı, `.kargo-table__actions-
+inner` gerçekten `display:grid`, üç ürünlü bir kargonun (Gg/Gggg/Hhgg)
+her satırının kendi ikonu olduğu hem koleksiyon hücresinde hem detay
+panelinde ayrı ayrı teyit edildi. Konsol hatası yok.
+
+---
+Değişen dosyalar (v8.21):
+  DÜZEN : css/style-v8.css (.kargo-table-wrap kart görünümü, dikey
+          border'lar kaldırıldı, .kargo-table__urun-item yeni,
+          .kargo-table__dt/-time/-date/--empty yeni, .kargo-row__
+          action-btn--danger sürekli kırmızı+34px, .kargo-table__
+          actions-inner grid, .kargo-detail__meta/-chip yeni,
+          .kargo-detail .urun-chip override, .urun-chip__name/__adet
+          yeni, .kargo-mcard__urun-list yeni, mobil kart font bumpları),
+          js/main.js (yeni dateTimeChipHtml/urunListItemsHtml
+          yardımcıları, kargoDetailContent meta satırı + ikonlu
+          başlıklar + urun-chip yeniden yapılandırma, kargoTableRowPairHtml/
+          kargoMobileCardHtml yeni yardımcıları kullanıyor), js/admin.js
+          (renderOzetView → Son Eklenen Kargolar artık kargoTableHtml/
+          bindKargoTableEvents kullanıyor, çift başlık sarmalayıcısı
+          kaldırıldı)
